@@ -345,16 +345,16 @@
       </div>
 
       <div class="tabs">
-        <button class="tab-button active" onclick="switchTab(event, 'users')">
+        <button class="tab-button active" onclick="switchTab('users')">
           User Management
         </button>
-        <button class="tab-button" onclick="switchTab(event, 'languages')">
+        <button class="tab-button" onclick="switchTab('languages')">
           Language Management
         </button>
-        <button class="tab-button" onclick="switchTab(event, 'datasets')">
+        <button class="tab-button" onclick="switchTab('datasets')">
           Gold Datasets
         </button>
-        <button class="tab-button" onclick="switchTab(event, 'logs')">
+        <button class="tab-button" onclick="switchTab('logs')">
           Activity Logs
         </button>
       </div>
@@ -809,59 +809,70 @@
     </div>
 
     <script>
-                  const baseUrl =
-                    "{{ request.base_url | trim('/') }}";
-      function switchTab(event, tabName) {
-        document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.remove("active"));
-        document.querySelectorAll(".tab-button").forEach((btn) => btn.classList.remove("active"));
+      const baseUrl = "{{ request.base_url | trim('/') }}";
+      function switchTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll(".tab-content").forEach((tab) => {
+          tab.classList.remove("active");
+        });
 
+        // Remove active class from all tab buttons
+        document.querySelectorAll(".tab-button").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+
+        // Show selected tab content
         document.getElementById(tabName).classList.add("active");
+
+        // Add active class to clicked button
         event.target.classList.add("active");
       }
 
-                  function editUser(id, username, email, isActive) {
-                    document.getElementById("edit_username").value = username;
-                    document.getElementById("edit_email").value = email;
-                    document.getElementById("edit_is_active").checked = isActive === "true";
-                    document.getElementById(
-                      "editUserForm"
-                    ).action = `${baseUrl}/admin/update_user/${id}`;
-                    document.getElementById("editUserModal").style.display = "block";
-                  }
+      function editUser(id, username, email, isActive) {
+        document.getElementById("edit_username").value = username;
+        document.getElementById("edit_email").value = email;
+        document.getElementById("edit_is_active").checked = isActive === "true";
+        document.getElementById(
+          "editUserForm"
+        ).action = `${baseUrl}/admin/update_user/${id}`;
+        document.getElementById("editUserModal").style.display = "block";
+      }
 
-                  function editLanguage(id, languageCode, languageName) {
-              document.getElementById("edit_language_code").value = languageCode;
-              document.getElementById("edit_language_name").value = languageName;
-              document.getElementById("editLanguageForm").action = `${baseUrl}/admin/update_language/${id}`;
-              document.getElementById("editLanguageModal").style.display = "block";
-            }      }
+      function editLanguage(id, languageCode, languageName) {
+        document.getElementById("edit_language_code").value = languageCode;
+        document.getElementById("edit_language_name").value = languageName;
+        document.getElementById(
+          "editLanguageForm"
+        ).action = `${baseUrl}/admin/update_language/${id}`;
+        document.getElementById("editLanguageModal").style.display = "block";
+      }
 
-                  function closeUserModal() {
-                    document.getElementById("editUserModal").style.display = "none";
-                  }
+      function closeUserModal() {
+        document.getElementById("editUserModal").style.display = "none";
+      }
 
-                  function closeLanguageModal() {
-                    document.getElementById("editLanguageModal").style.display = "none";
-                  }
+      function closeLanguageModal() {
+        document.getElementById("editLanguageModal").style.display = "none";
+      }
 
-                  function confirmLanguageDelete(languageName) {
-                    return confirm(
-                      `Are you sure you want to delete the language "${languageName}"? This will also delete all associated gold datasets.`
-                    );
-                  }
+      function confirmLanguageDelete(languageName) {
+        return confirm(
+          `Are you sure you want to delete the language "${languageName}"? This will also delete all associated gold datasets.`
+        );
+      }
 
-                  // Close modals when clicking outside
-                  window.onclick = function (event) {
-                    const userModal = document.getElementById("editUserModal");
-                    const languageModal = document.getElementById("editLanguageModal");
+      // Close modals when clicking outside
+      window.onclick = function (event) {
+        const userModal = document.getElementById("editUserModal");
+        const languageModal = document.getElementById("editLanguageModal");
 
-                    if (event.target === userModal) {
-                      closeUserModal();
-                    }
-                    if (event.target === languageModal) {
-                      closeLanguageModal();
-                    }
-                  };
+        if (event.target === userModal) {
+          closeUserModal();
+        }
+        if (event.target === languageModal) {
+          closeLanguageModal();
+        }
+      };
     </script>
   </body>
 </html>
