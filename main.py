@@ -761,7 +761,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     return response
 
 @app.get("/logout", name="logout")
-async def logout():
+async def logout(request: Request):
     response = RedirectResponse(url=request.url_for("homepage"),status_code=302)
     response.delete_cookie(key="session_token")
     return response
@@ -799,6 +799,7 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
 
 @app.post("/evaluate")
 async def evaluate_file(
+    request: Request,
     language_id: int = Form(...),
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
@@ -851,6 +852,7 @@ async def evaluate_file(
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
 @app.post("/admin/add_language",name="add_language")
 async def add_language(
+    request: Request,
     language_code: str = Form(...),
     language_name: str = Form(...),
     user: dict = Depends(get_current_user)
@@ -904,6 +906,7 @@ async def add_language(
 
 @app.post("/admin/update_language/{language_id}")
 async def update_language(
+    request: Request,
     language_id: int,
     language_code: str = Form(...),
     language_name: str = Form(...),
@@ -959,6 +962,7 @@ async def update_language(
 
 @app.post("/admin/delete_language/{language_id}",name="delete_language")
 async def delete_language(
+    request: Request,
     language_id: int,
     user: dict = Depends(get_current_user)
 ):
@@ -1088,6 +1092,7 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
 
 @app.post("/admin/add_user", name="add_user")
 async def add_user(
+    request: Request,
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
@@ -1138,6 +1143,7 @@ async def add_user(
 
 @app.post("/admin/upload_gold_dataset",name="upload_gold_dataset")
 async def upload_gold_dataset(
+    request: Request,
     language_id: int = Form(...),
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
@@ -1192,6 +1198,7 @@ async def upload_gold_dataset(
         raise HTTPException(status_code=500, detail=f"Error uploading gold dataset: {str(e)}")
 @app.post("/admin/delete_gold_dataset/{dataset_id}")
 async def delete_gold_dataset(
+    request: Request,
     dataset_id: int,
     user: dict = Depends(get_current_user)
 ):
