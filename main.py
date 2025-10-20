@@ -760,14 +760,14 @@ async def login(request: Request, username: str = Form(...), password: str = For
 
 @app.get("/logout")
 async def logout():
-    response = RedirectResponse(url="/", status_code=302)
+    response = RedirectResponse(url="", status_code=302)
     response.delete_cookie(key="session_token")
     return response
 
 @app.get("/client", response_class=HTMLResponse)
 async def client_dashboard(request: Request, user: dict = Depends(get_current_user)):
     if user['username'] == 'admin':
-        return RedirectResponse(url="/admin", status_code=302)
+        return RedirectResponse(url="admin", status_code=302)
     
     # Get languages from database
     conn = get_db_connection()
@@ -898,7 +898,7 @@ async def add_language(
         # Add to demo storage
         add_to_demo_languages(language_code, language_name)
     
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="admin", status_code=302)
 
 @app.post("/admin/update_language/{language_id}")
 async def update_language(
@@ -953,7 +953,7 @@ async def update_language(
         # Update demo storage
         update_demo_language(language_id, language_code, language_name)
     
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="admin", status_code=302)
 
 @app.post("/admin/delete_language/{language_id}")
 async def delete_language(
@@ -1132,7 +1132,7 @@ async def add_user(
         }
         print(f"SUCCESS: User {username} added to demo storage")
     
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="admin", status_code=302)
 
 @app.post("/admin/upload_gold_dataset")
 async def upload_gold_dataset(
@@ -1183,7 +1183,7 @@ async def upload_gold_dataset(
             # Save to demo data
             add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'])
         
-        return RedirectResponse(url="/admin", status_code=302)
+        return RedirectResponse(url="admin", status_code=302)
         
     except Exception as e:
         print(f"ERROR uploading gold dataset: {e}")
@@ -1272,7 +1272,7 @@ def add_to_demo_datasets(language_id: int, filename: str, file_path: str, upload
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting Coreference Evaluation System...")
+    print("Starting Discourse Evaluation System...")
     print("Demo credentials:")
     print("  Admin: admin/admin123")
     print("  User: testuser/user123")
