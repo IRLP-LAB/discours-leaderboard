@@ -898,7 +898,7 @@ async def add_language(
         # Add to demo storage
         add_to_demo_languages(language_code, language_name)
     
-    return RedirectResponse(url="admin", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 @app.post("/admin/update_language/{language_id}")
 async def update_language(
