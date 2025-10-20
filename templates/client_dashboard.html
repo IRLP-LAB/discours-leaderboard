@@ -397,8 +397,7 @@
     </div>
 
     <script>
-      const baseUrl =
-        "{{ request.url_for('client_dashboard').split('/client')[0] }}";
+      const baseUrl = "{{ request.base_url | trim('/') }}";
       document
         .getElementById("evaluationForm")
         .addEventListener("submit", async function (e) {

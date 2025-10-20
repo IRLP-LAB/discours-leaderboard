@@ -810,7 +810,7 @@
 
     <script>
             const baseUrl =
-              "{{ request.url_for('admin_dashboard').split('/admin')[0] }}";
+              "{{ request.base_url | trim('/') }}";
             function switchTab(tabName) {
               // Hide all tab contents
               document.querySelectorAll(".tab-content").forEach((tab) => {
