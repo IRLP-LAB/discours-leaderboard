@@ -898,7 +898,7 @@ async def add_language(
         # Add to demo storage
         add_to_demo_languages(language_code, language_name)
     
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
 
 @app.post("/admin/update_language/{language_id}")
 async def update_language(
@@ -953,7 +953,7 @@ async def update_language(
         # Update demo storage
         update_demo_language(language_id, language_code, language_name)
     
-    return RedirectResponse(url="admin", status_code=302)
+    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
 
 @app.post("/admin/delete_language/{language_id}")
 async def delete_language(
@@ -987,7 +987,7 @@ async def delete_language(
         # Delete from demo storage
         delete_from_demo_languages(language_id)
     
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
 
 # Helper functions for demo language management
 def add_to_demo_languages(language_code: str, language_name: str):
@@ -1131,8 +1131,8 @@ async def add_user(
             'is_active': True
         }
         print(f"SUCCESS: User {username} added to demo storage")
-    
-    return RedirectResponse(url="admin", status_code=302)
+
+    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
 
 @app.post("/admin/upload_gold_dataset")
 async def upload_gold_dataset(
@@ -1183,7 +1183,7 @@ async def upload_gold_dataset(
             # Save to demo data
             add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'])
         
-        return RedirectResponse(url="admin", status_code=302)
+        return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
         
     except Exception as e:
         print(f"ERROR uploading gold dataset: {e}")
@@ -1232,7 +1232,7 @@ async def delete_gold_dataset(
         # Delete from demo storage
         delete_from_demo_datasets(dataset_id)
     
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
 
 def delete_from_demo_datasets(dataset_id: int):
     """Delete gold dataset from demo storage"""
