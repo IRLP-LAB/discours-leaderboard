@@ -289,7 +289,7 @@
             evaluation.
           </p>
         </div>
-        <a href="/logout" class="logout-btn"> 🚪 Logout </a>
+        <a href="logout" class="logout-btn"> 🚪 Logout </a>
       </div>
 
       <div class="main-content">
@@ -414,7 +414,7 @@
           results.style.display = "none";
 
           try {
-            const response = await fetch("/evaluate", {
+            const response = await fetch("evaluate", {
               method: "POST",
               body: formData,
             });

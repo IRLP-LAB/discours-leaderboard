@@ -1,712 +1,877 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Dashboard - Coreference Evaluation</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            min-height: 100vh;
-            color: #333;
+      body {
+        font-family: "Arial", sans-serif;
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        min-height: 100vh;
+        color: #333;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .header-content h1 {
+        color: #2c3e50;
+        margin-bottom: 10px;
+      }
+
+      .header-content p {
+        color: #666;
+      }
+
+      .logout-btn {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .logout-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+      }
+
+      .admin-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .stat-card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .stat-number {
+        font-size: 2em;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 5px;
+      }
+
+      .stat-label {
+        color: #666;
+        font-size: 14px;
+      }
+
+      .tabs {
+        display: flex;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 15px 15px 0 0;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      }
+
+      .tab-button {
+        flex: 1;
+        padding: 15px 20px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        color: #666;
+        transition: all 0.3s ease;
+      }
+
+      .tab-button.active {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+      }
+
+      .tab-content {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 0 0 15px 15px;
+        padding: 30px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+      }
+
+      .form-section {
+        background: #f8f9fa;
+        padding: 25px;
+        border-radius: 10px;
+        border-left: 4px solid #2c3e50;
+      }
+
+      .form-section h3 {
+        color: #2c3e50;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #34495e;
+        padding-bottom: 10px;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #555;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+      }
+
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: #2c3e50;
+      }
+
+      .btn {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        padding: 12px 25px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(44, 62, 80, 0.4);
+      }
+
+      .btn-danger {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      }
+
+      .btn-danger:hover {
+        box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+      }
+
+      .btn-success {
+        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+      }
+
+      .btn-success:hover {
+        box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+      }
+
+      .table-container {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      th {
+        background-color: #f8f9fa;
+        position: sticky;
+        top: 0;
+        font-weight: bold;
+        color: #555;
+      }
+
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+
+      .status-active {
+        color: #28a745;
+        font-weight: bold;
+      }
+
+      .status-inactive {
+        color: #dc3545;
+        font-weight: bold;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 5px;
+      }
+
+      .btn-small {
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 40px 0;
+        color: #666;
+      }
+
+      .info-tip {
+        margin-top: 15px;
+        padding: 10px;
+        background-color: #e3f2fd;
+        border-radius: 5px;
+        font-size: 12px;
+        color: #1565c0;
+      }
+
+      .language-code {
+        background-color: #007bff;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+      }
+
+      @media (max-width: 768px) {
+        .form-grid {
+          grid-template-columns: 1fr;
         }
 
         .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .header-content h1 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-
-        .header-content p {
-            color: #666;
-        }
-
-        .logout-btn {
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
-        }
-
-        .admin-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-        }
-
-        .stat-number {
-            font-size: 2em;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            color: #666;
-            font-size: 14px;
+          padding: 10px;
         }
 
         .tabs {
-            display: flex;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px 15px 0 0;
-            overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+          flex-direction: column;
         }
 
-        .tab-button {
-            flex: 1;
-            padding: 15px 20px;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            color: #666;
-            transition: all 0.3s ease;
+        .header {
+          flex-direction: column;
+          gap: 15px;
+          text-align: center;
         }
 
-        .tab-button.active {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
+        .logout-btn {
+          align-self: stretch;
+          justify-content: center;
         }
-
-        .tab-content {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 0 0 15px 15px;
-            padding: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-
-        .form-section {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 10px;
-            border-left: 4px solid #2c3e50;
-        }
-
-        .form-section h3 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #34495e;
-            padding-bottom: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #555;
-        }
-
-        input, select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s ease;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border-color: #2c3e50;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(44, 62, 80, 0.4);
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-        }
-
-        .btn-danger:hover {
-            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-        }
-
-        .btn-success:hover {
-            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
-        }
-
-        .table-container {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-
-        th {
-            background-color: #f8f9fa;
-            position: sticky;
-            top: 0;
-            font-weight: bold;
-            color: #555;
-        }
-
-        tr:hover {
-            background-color: #f5f5f5;
-        }
-
-        .status-active {
-            color: #28a745;
-            font-weight: bold;
-        }
-
-        .status-inactive {
-            color: #dc3545;
-            font-weight: bold;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 5px;
-        }
-
-        .btn-small {
-            padding: 5px 10px;
-            font-size: 12px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 0;
-            color: #666;
-        }
-
-        .info-tip {
-            margin-top: 15px;
-            padding: 10px;
-            background-color: #e3f2fd;
-            border-radius: 5px;
-            font-size: 12px;
-            color: #1565c0;
-        }
-
-        .language-code {
-            background-color: #007bff;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        @media (max-width: 768px) {
-            .form-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .container {
-                padding: 10px;
-            }
-            
-            .tabs {
-                flex-direction: column;
-            }
-
-            .header {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-
-            .logout-btn {
-                align-self: stretch;
-                justify-content: center;
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <div class="header-content">
-                <h1>Admin Dashboard</h1>
-                <p>Manage users, languages, gold datasets, and system configuration</p>
-            </div>
-            <a href="/logout" class="logout-btn">
-                Logout
-            </a>
+      <div class="header">
+        <div class="header-content">
+          <h1>Admin Dashboard</h1>
+          <p>
+            Manage users, languages, gold datasets, and system configuration
+          </p>
         </div>
+        <a href="logout" class="logout-btn"> Logout </a>
+      </div>
 
-        <div class="admin-stats">
-            <div class="stat-card">
-                <div class="stat-number">{{ users|length }}</div>
-                <div class="stat-label">Total Users</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{{ languages|length }}</div>
-                <div class="stat-label">Languages</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{{ gold_datasets|length }}</div>
-                <div class="stat-label">Gold Datasets</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{{ recent_activities|length }}</div>
-                <div class="stat-label">Recent Activities</div>
-            </div>
+      <div class="admin-stats">
+        <div class="stat-card">
+          <div class="stat-number">{{ users|length }}</div>
+          <div class="stat-label">Total Users</div>
         </div>
-
-        <div class="tabs">
-            <button class="tab-button active" onclick="switchTab('users')">User Management</button>
-            <button class="tab-button" onclick="switchTab('languages')">Language Management</button>
-            <button class="tab-button" onclick="switchTab('datasets')">Gold Datasets</button>
-            <button class="tab-button" onclick="switchTab('logs')">Activity Logs</button>
+        <div class="stat-card">
+          <div class="stat-number">{{ languages|length }}</div>
+          <div class="stat-label">Languages</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-number">{{ gold_datasets|length }}</div>
+          <div class="stat-label">Gold Datasets</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">{{ recent_activities|length }}</div>
+          <div class="stat-label">Recent Activities</div>
+        </div>
+      </div>
 
-        <!-- Users Tab -->
-        <div id="users" class="tab-content active">
-            <div class="form-grid">
-                <div class="form-section">
-                    <h3>Add New User</h3>
-                    <form method="post" action="{{ url_for('admin_add_user') }}>
-                        <div class="form-group">
-                            <label for="username">Username:</label>
-                            <input type="text" id="username" name="username" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="email">Email:</label>
-                            <input type="email" id="email" name="email" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Password:</label>
-                            <input type="password" id="password" name="password" required>
-                        </div>
-                        <button type="submit" class="btn">Add User</button>
-                    </form>
-                </div>
+      <div class="tabs">
+        <button class="tab-button active" onclick="switchTab('users')">
+          User Management
+        </button>
+        <button class="tab-button" onclick="switchTab('languages')">
+          Language Management
+        </button>
+        <button class="tab-button" onclick="switchTab('datasets')">
+          Gold Datasets
+        </button>
+        <button class="tab-button" onclick="switchTab('logs')">
+          Activity Logs
+        </button>
+      </div>
 
-                <div class="form-section">
-                    <h3>Existing Users</h3>
-                    {% if users %}
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for user in users %}
-                                <tr>
-                                    <td>{{ user.username }}</td>
-                                    <td>{{ user.email }}</td>
-                                    <td class="{{ 'status-active' if user.is_active else 'status-inactive' }}">
-                                        {{ 'Active' if user.is_active else 'Inactive' }}
-                                    </td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="btn btn-small" onclick="editUser('{{ user.id }}', '{{ user.username }}', '{{ user.email }}', '{{ user.is_active|lower }}')">Edit</button>
-                                            <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }} style="display: inline;" onsubmit="return confirm('Are you sure?')">
-                                                <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                                            </form>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="empty-state">
-                        <p>No users found.</p>
-                        <p style="font-size: 14px; margin-top: 10px;">Add your first user using the form on the left.</p>
-                    </div>
-                    {% endif %}
-                </div>
+      <!-- Users Tab -->
+      <div id="users" class="tab-content active">
+        <div class="form-grid">
+          <div class="form-section">
+            <h3>Add New User</h3>
+            <form method="post" action="admin/add_user">
+              <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required />
+              </div>
+              <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required />
+              </div>
+              <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required />
+              </div>
+              <button type="submit" class="btn">Add User</button>
+            </form>
+          </div>
+
+          <div class="form-section">
+            <h3>Existing Users</h3>
+            {% if users %}
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for user in users %}
+                  <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                    <td
+                      class="{{ 'status-active' if user.is_active else 'status-inactive' }}"
+                    >
+                      {{ 'Active' if user.is_active else 'Inactive' }}
+                    </td>
+                    <td>
+                      <div class="action-buttons">
+                        <button
+                          class="btn btn-small"
+                          onclick="editUser('{{ user.id }}', '{{ user.username }}', '{{ user.email }}', '{{ user.is_active|lower }}')"
+                        >
+                          Edit
+                        </button>
+                        <form
+                          method="post"
+                          action="admin/delete_user/{{ user.id }}"
+                          style="display: inline"
+                          onsubmit="return confirm('Are you sure?')"
+                        >
+                          <button
+                            type="submit"
+                            class="btn btn-danger btn-small"
+                          >
+                            Delete
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
-        </div>
-
-        <!-- Languages Tab -->
-        <div id="languages" class="tab-content">
-            <div class="form-grid">
-                <div class="form-section">
-                    <h3>Add New Language</h3>
-                    <form method="post" action="{{ url_for('admin_add_language') }}>
-                        <div class="form-group">
-                            <label for="language_code">Language Code:</label>
-                            <input type="text" id="language_code" name="language_code" placeholder="e.g., en, hi, fr" maxlength="10" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="language_name">Language Name:</label>
-                            <input type="text" id="language_name" name="language_name" placeholder="e.g., English, Hindi, French" required>
-                        </div>
-                        <button type="submit" class="btn btn-success">Add Language</button>
-                    </form>
-                    
-                    <div class="info-tip">
-                        <strong>Info:</strong> Use standard language codes (ISO 639-1) like 'en' for English, 'hi' for Hindi, 'fr' for French, etc.
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <h3>Existing Languages</h3>
-                    {% if languages %}
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Language Code</th>
-                                    <th>Language Name</th>
-                                    <th>Gold Datasets</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for lang in languages %}
-                                <tr>
-                                    <td><span class="language-code">{{ lang.language_code }}</span></td>
-                                    <td>{{ lang.language_name }}</td>
-                                    <td>
-                                        {% set dataset_count = gold_datasets|selectattr('language_id', 'equalto', lang.id)|list|length %}
-                                        {{ dataset_count }} dataset{{ 's' if dataset_count != 1 else '' }}
-                                    </td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <button class="btn btn-small" onclick="editLanguage('{{ lang.id }}', '{{ lang.language_code }}', '{{ lang.language_name }}')">Edit</button>
-                                            <form method="post" action="{{ url_for('admin_delete_language', lang_id=lang.id) }}" style="display: inline;" onsubmit="return confirmLanguageDelete('{{ lang.language_name }}')">
-                                                <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                                            </form>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="empty-state">
-                        <p>No languages configured yet.</p>
-                        <p style="font-size: 14px; margin-top: 10px;">Add your first language using the form on the left.</p>
-                    </div>
-                    {% endif %}
-                </div>
+            {% else %}
+            <div class="empty-state">
+              <p>No users found.</p>
+              <p style="font-size: 14px; margin-top: 10px">
+                Add your first user using the form on the left.
+              </p>
             </div>
+            {% endif %}
+          </div>
         </div>
+      </div>
 
-        <!-- Datasets Tab -->
-        <div id="datasets" class="tab-content">
-            <div class="form-grid">
-                <div class="form-section">
-                    <h3>Upload Gold Dataset</h3>
-                    <form method="post" action="{{ url_for('admin_upload_gold_dataset') }} enctype="multipart/form-data">
-                        <div class="form-group">
-                            <label for="language_id">Language:</label>
-                            <select id="language_id" name="language_id" required>
-                                <option value="">Select Language...</option>
-                                {% for lang in languages %}
-                                <option value="{{ lang.id }}">{{ lang.language_name }} ({{ lang.language_code }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="dataset_file">Gold Dataset File (.txt):</label>
-                            <input type="file" id="dataset_file" name="file" accept=".txt" required>
-                        </div>
-                        <button type="submit" class="btn">Upload Dataset</button>
-                    </form>
-                    
-                    <div class="info-tip">
-                        <strong>Info:</strong> Gold datasets are reference files used to evaluate user submissions. Upload one dataset per language for comparison purposes.
-                    </div>
-                </div>
+      <!-- Languages Tab -->
+      <div id="languages" class="tab-content">
+        <div class="form-grid">
+          <div class="form-section">
+            <h3>Add New Language</h3>
+            <form method="post" action="admin/add_language">
+              <div class="form-group">
+                <label for="language_code">Language Code:</label>
+                <input
+                  type="text"
+                  id="language_code"
+                  name="language_code"
+                  placeholder="e.g., en, hi, fr"
+                  maxlength="10"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="language_name">Language Name:</label>
+                <input
+                  type="text"
+                  id="language_name"
+                  name="language_name"
+                  placeholder="e.g., English, Hindi, French"
+                  required
+                />
+              </div>
+              <button type="submit" class="btn btn-success">
+                Add Language
+              </button>
+            </form>
 
-                <div class="form-section">
-                    <h3>Existing Gold Datasets</h3>
-                    {% if gold_datasets %}
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Language</th>
-                                    <th>Filename</th>
-                                    <th>Uploaded By</th>
-                                    <th>Upload Date</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for dataset in gold_datasets %}
-                                <tr>
-                                    <td>{{ dataset.language_name }}</td>
-                                    <td>{{ dataset.filename }}</td>
-                                    <td>{{ dataset.uploaded_by }}</td>
-                                    <td>
-                                        {% if dataset.created_at %}
-                                            {% if dataset.created_at.strftime %}
-                                                {{ dataset.created_at.strftime('%Y-%m-%d %H:%M') }}
-                                            {% else %}
-                                                {{ dataset.created_at }}
-                                            {% endif %}
-                                        {% else %}
-                                            N/A
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="post" action="{{ url_for('admin_delete_gold_dataset', dataset_id=dataset.id) }} style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this gold dataset?')">
-                                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="info-tip">
-                        <strong>Tip:</strong> Gold datasets are stored in language-specific folders and used for evaluation comparisons.
-                    </div>
-                    {% else %}
-                    <div class="empty-state">
-                        <p>No gold datasets uploaded yet.</p>
-                        <p style="font-size: 14px; margin-top: 10px;">Upload your first gold dataset using the form on the left.</p>
-                    </div>
-                    {% endif %}
-                </div>
+            <div class="info-tip">
+              <strong>Info:</strong> Use standard language codes (ISO 639-1)
+              like 'en' for English, 'hi' for Hindi, 'fr' for French, etc.
             </div>
-        </div>
+          </div>
 
-        <!-- Logs Tab -->
-        <div id="logs" class="tab-content">
-            <div class="form-section">
-                <h3>Recent User Activities</h3>
-                {% if recent_activities %}
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Activity</th>
-                                <th>Language</th>
-                                <th>File</th>
-                                <th>Date/Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for activity in recent_activities %}
-                            <tr>
-                                <td>{{ activity.username }}</td>
-                                <td>{{ activity.activity_type|title }}</td>
-                                <td>{{ activity.language_used or 'N/A' }}</td>
-                                <td>{{ activity.file_uploaded or 'N/A' }}</td>
-                                <td>{{ activity.formatted_date }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="empty-state">
-                    <p>No recent activities recorded.</p>
-                    <p style="font-size: 14px; margin-top: 10px;">User activities will appear here as they use the system.</p>
-                </div>
-                {% endif %}
+          <div class="form-section">
+            <h3>Existing Languages</h3>
+            {% if languages %}
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Language Code</th>
+                    <th>Language Name</th>
+                    <th>Gold Datasets</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for lang in languages %}
+                  <tr>
+                    <td>
+                      <span class="language-code"
+                        >{{ lang.language_code }}</span
+                      >
+                    </td>
+                    <td>{{ lang.language_name }}</td>
+                    <td>
+                      {% set dataset_count =
+                      gold_datasets|selectattr('language_id', 'equalto',
+                      lang.id)|list|length %} {{ dataset_count }} dataset{{ 's'
+                      if dataset_count != 1 else '' }}
+                    </td>
+                    <td>
+                      <div class="action-buttons">
+                        <button
+                          class="btn btn-small"
+                          onclick="editLanguage('{{ lang.id }}', '{{ lang.language_code }}', '{{ lang.language_name }}')"
+                        >
+                          Edit
+                        </button>
+                        <form
+                          method="post"
+                          action="admin/delete_language/{{ lang.id }}"
+                          style="display: inline"
+                          onsubmit="return confirmLanguageDelete('{{ lang.language_name }}')"
+                        >
+                          <button
+                            type="submit"
+                            class="btn btn-danger btn-small"
+                          >
+                            Delete
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
+            {% else %}
+            <div class="empty-state">
+              <p>No languages configured yet.</p>
+              <p style="font-size: 14px; margin-top: 10px">
+                Add your first language using the form on the left.
+              </p>
+            </div>
+            {% endif %}
+          </div>
         </div>
+      </div>
+
+      <!-- Datasets Tab -->
+      <div id="datasets" class="tab-content">
+        <div class="form-grid">
+          <div class="form-section">
+            <h3>Upload Gold Dataset</h3>
+            <form
+              method="post"
+              action="admin/upload_gold_dataset"
+              enctype="multipart/form-data"
+            >
+              <div class="form-group">
+                <label for="language_id">Language:</label>
+                <select id="language_id" name="language_id" required>
+                  <option value="">Select Language...</option>
+                  {% for lang in languages %}
+                  <option value="{{ lang.id }}">
+                    {{ lang.language_name }} ({{ lang.language_code }})
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="dataset_file">Gold Dataset File (.txt):</label>
+                <input
+                  type="file"
+                  id="dataset_file"
+                  name="file"
+                  accept=".txt"
+                  required
+                />
+              </div>
+              <button type="submit" class="btn">Upload Dataset</button>
+            </form>
+
+            <div class="info-tip">
+              <strong>Info:</strong> Gold datasets are reference files used to
+              evaluate user submissions. Upload one dataset per language for
+              comparison purposes.
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>Existing Gold Datasets</h3>
+            {% if gold_datasets %}
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Language</th>
+                    <th>Filename</th>
+                    <th>Uploaded By</th>
+                    <th>Upload Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for dataset in gold_datasets %}
+                  <tr>
+                    <td>{{ dataset.language_name }}</td>
+                    <td>{{ dataset.filename }}</td>
+                    <td>{{ dataset.uploaded_by }}</td>
+                    <td>
+                      {% if dataset.created_at %} {% if
+                      dataset.created_at.strftime %} {{
+                      dataset.created_at.strftime('%Y-%m-%d %H:%M') }} {% else
+                      %} {{ dataset.created_at }} {% endif %} {% else %} N/A {%
+                      endif %}
+                    </td>
+                    <td>
+                      <form
+                        method="post"
+                        action="admin/delete_gold_dataset/{{ dataset.id }}"
+                        style="display: inline"
+                        onsubmit="return confirm('Are you sure you want to delete this gold dataset?')"
+                      >
+                        <button type="submit" class="btn btn-danger btn-small">
+                          Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="info-tip">
+              <strong>Tip:</strong> Gold datasets are stored in
+              language-specific folders and used for evaluation comparisons.
+            </div>
+            {% else %}
+            <div class="empty-state">
+              <p>No gold datasets uploaded yet.</p>
+              <p style="font-size: 14px; margin-top: 10px">
+                Upload your first gold dataset using the form on the left.
+              </p>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs Tab -->
+      <div id="logs" class="tab-content">
+        <div class="form-section">
+          <h3>Recent User Activities</h3>
+          {% if recent_activities %}
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Activity</th>
+                  <th>Language</th>
+                  <th>File</th>
+                  <th>Date/Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for activity in recent_activities %}
+                <tr>
+                  <td>{{ activity.username }}</td>
+                  <td>{{ activity.activity_type|title }}</td>
+                  <td>{{ activity.language_used or 'N/A' }}</td>
+                  <td>{{ activity.file_uploaded or 'N/A' }}</td>
+                  <td>{{ activity.formatted_date }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="empty-state">
+            <p>No recent activities recorded.</p>
+            <p style="font-size: 14px; margin-top: 10px">
+              User activities will appear here as they use the system.
+            </p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
     </div>
 
     <!-- Edit User Modal -->
-    <div id="editUserModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; width: 400px;">
-            <h3 style="margin-bottom: 20px; color: #2c3e50;">Edit User</h3>
-            <form id="editUserForm" method="post">
-                <div class="form-group">
-                    <label for="edit_username">Username:</label>
-                    <input type="text" id="edit_username" name="username" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit_email">Email:</label>
-                    <input type="email" id="edit_email" name="email" required>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="edit_is_active" name="is_active" value="true">
-                        Active
-                    </label>
-                </div>
-                <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button type="button" class="btn" onclick="closeUserModal()">Cancel</button>
-                    <button type="submit" class="btn">Update User</button>
-                </div>
-            </form>
-        </div>
+    <div
+      id="editUserModal"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+      "
+    >
+      <div
+        style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: white;
+          padding: 30px;
+          border-radius: 15px;
+          width: 400px;
+        "
+      >
+        <h3 style="margin-bottom: 20px; color: #2c3e50">Edit User</h3>
+        <form id="editUserForm" method="post">
+          <div class="form-group">
+            <label for="edit_username">Username:</label>
+            <input type="text" id="edit_username" name="username" required />
+          </div>
+          <div class="form-group">
+            <label for="edit_email">Email:</label>
+            <input type="email" id="edit_email" name="email" required />
+          </div>
+          <div class="form-group">
+            <label>
+              <input
+                type="checkbox"
+                id="edit_is_active"
+                name="is_active"
+                value="true"
+              />
+              Active
+            </label>
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end">
+            <button type="button" class="btn" onclick="closeUserModal()">
+              Cancel
+            </button>
+            <button type="submit" class="btn">Update User</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <!-- Edit Language Modal -->
-    <div id="editLanguageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; width: 400px;">
-            <h3 style="margin-bottom: 20px; color: #2c3e50;">Edit Language</h3>
-            <form id="editLanguageForm" method="post">
-                <div class="form-group">
-                    <label for="edit_language_code">Language Code:</label>
-                    <input type="text" id="edit_language_code" name="language_code" maxlength="10" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit_language_name">Language Name:</label>
-                    <input type="text" id="edit_language_name" name="language_name" required>
-                </div>
-                <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button type="button" class="btn" onclick="closeLanguageModal()">Cancel</button>
-                    <button type="submit" class="btn btn-success">Update Language</button>
-                </div>
-            </form>
-        </div>
+    <div
+      id="editLanguageModal"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+      "
+    >
+      <div
+        style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: white;
+          padding: 30px;
+          border-radius: 15px;
+          width: 400px;
+        "
+      >
+        <h3 style="margin-bottom: 20px; color: #2c3e50">Edit Language</h3>
+        <form id="editLanguageForm" method="post">
+          <div class="form-group">
+            <label for="edit_language_code">Language Code:</label>
+            <input
+              type="text"
+              id="edit_language_code"
+              name="language_code"
+              maxlength="10"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="edit_language_name">Language Name:</label>
+            <input
+              type="text"
+              id="edit_language_name"
+              name="language_name"
+              required
+            />
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end">
+            <button type="button" class="btn" onclick="closeLanguageModal()">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-success">
+              Update Language
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <script>
-        function switchTab(tabName) {
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Remove active class from all tab buttons
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected tab content
-            document.getElementById(tabName).classList.add('active');
-            
-            // Add active class to clicked button
-            event.target.classList.add('active');
-        }
+      function switchTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll(".tab-content").forEach((tab) => {
+          tab.classList.remove("active");
+        });
 
-        function editUser(id, username, email, isActive) {
-            document.getElementById('edit_username').value = username;
-            document.getElementById('edit_email').value = email;
-            document.getElementById('edit_is_active').checked = isActive === 'true';
-            document.getElementById('editUserForm').action = `/admin/update_user/${id}`;
-            document.getElementById('editUserModal').style.display = 'block';
-        }
+        // Remove active class from all tab buttons
+        document.querySelectorAll(".tab-button").forEach((btn) => {
+          btn.classList.remove("active");
+        });
 
-        function editLanguage(id, languageCode, languageName) {
-            document.getElementById('edit_language_code').value = languageCode;
-            document.getElementById('edit_language_name').value = languageName;
-            document.getElementById('editLanguageForm').action = `/admin/update_language/${id}`;
-            document.getElementById('editLanguageModal').style.display = 'block';
-        }
+        // Show selected tab content
+        document.getElementById(tabName).classList.add("active");
 
-        function closeUserModal() {
-            document.getElementById('editUserModal').style.display = 'none';
-        }
+        // Add active class to clicked button
+        event.target.classList.add("active");
+      }
 
-        function closeLanguageModal() {
-            document.getElementById('editLanguageModal').style.display = 'none';
-        }
+      function editUser(id, username, email, isActive) {
+        document.getElementById("edit_username").value = username;
+        document.getElementById("edit_email").value = email;
+        document.getElementById("edit_is_active").checked = isActive === "true";
+        document.getElementById(
+          "editUserForm"
+        ).action = `admin/update_user/${id}`;
+        document.getElementById("editUserModal").style.display = "block";
+      }
 
-        function confirmLanguageDelete(languageName) {
-            return confirm(`Are you sure you want to delete the language "${languageName}"? This will also delete all associated gold datasets.`);
-        }
+      function editLanguage(id, languageCode, languageName) {
+        document.getElementById("edit_language_code").value = languageCode;
+        document.getElementById("edit_language_name").value = languageName;
+        document.getElementById(
+          "editLanguageForm"
+        ).action = `admin/update_language/${id}`;
+        document.getElementById("editLanguageModal").style.display = "block";
+      }
 
-        // Close modals when clicking outside
-        window.onclick = function(event) {
-            const userModal = document.getElementById('editUserModal');
-            const languageModal = document.getElementById('editLanguageModal');
-            
-            if (event.target === userModal) {
-                closeUserModal();
-            }
-            if (event.target === languageModal) {
-                closeLanguageModal();
-            }
+      function closeUserModal() {
+        document.getElementById("editUserModal").style.display = "none";
+      }
+
+      function closeLanguageModal() {
+        document.getElementById("editLanguageModal").style.display = "none";
+      }
+
+      function confirmLanguageDelete(languageName) {
+        return confirm(
+          `Are you sure you want to delete the language "${languageName}"? This will also delete all associated gold datasets.`
+        );
+      }
+
+      // Close modals when clicking outside
+      window.onclick = function (event) {
+        const userModal = document.getElementById("editUserModal");
+        const languageModal = document.getElementById("editLanguageModal");
+
+        if (event.target === userModal) {
+          closeUserModal();
         }
+        if (event.target === languageModal) {
+          closeLanguageModal();
+        }
+      };
     </script>
-</body>
+  </body>
 </html>

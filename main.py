@@ -43,7 +43,6 @@ DEMO_USERS = {
 
 DEMO_LANGUAGES = [
     {'id': 1, 'language_code': 'hi', 'language_name': 'Hindi'},
-    {'id': 2, 'language_code': 'en', 'language_name': 'English'}
 ]
 
 # Demo storage for evaluations and gold datasets
