@@ -760,7 +760,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
 
 @app.get("/logout")
 async def logout():
-    response = RedirectResponse(url="", status_code=302)
+    response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie(key="session_token")
     return response
 
