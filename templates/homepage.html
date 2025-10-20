@@ -468,7 +468,9 @@
           <a href="#about">About</a>
           <a href="#leaderboard">Leaderboard</a>
           <a href="#contact">Contact</a>
-          <a href="/login" class="login-btn">Login / Participate</a>
+          <a href="{{ url_for('login_page') }}" class="login-btn"
+            >Login / Participate</a
+          >
         </nav>
       </div>
     </header>
@@ -643,7 +645,7 @@
         <div class="footer-section">
           <h3>Quick Links</h3>
           <ul>
-            <li><a href="/login">Participant Login</a></li>
+            <li><a href="{{ url_for('login_page') }}">Participant Login</a></li>
             <li><a href="#about">About the Leaderboar</a></li>
             <li><a href="#leaderboard">Leaderboards</a></li>
           </ul>

@@ -289,7 +289,7 @@
             evaluation.
           </p>
         </div>
-        <a href="/logout" class="logout-btn"> 🚪 Logout </a>
+        <a href="{{ url_for('logout') }}" class="logout-btn"> 🚪 Logout </a>
       </div>
 
       <div class="main-content">
@@ -397,6 +397,8 @@
     </div>
 
     <script>
+      const baseUrl =
+        "{{ request.url_for('client_dashboard').split('/client')[0] }}";
       document
         .getElementById("evaluationForm")
         .addEventListener("submit", async function (e) {
@@ -414,7 +416,7 @@
           results.style.display = "none";
 
           try {
-            const response = await fetch("/evaluate", {
+            const response = await fetch(`${baseUrl}/evaluate`, {
               method: "POST",
               body: formData,
             });

@@ -737,7 +737,7 @@ async def home_redirect(request: Request):
 async def login_page(request: Request):
     """Display the login page"""
     return templates.TemplateResponse("login.html", {"request": request})
-@app.post("/login")
+@app.post("/login", name="login")
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
     user = authenticate_user(username, password)
     
@@ -759,7 +759,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     print(f"SUCCESS: User {username} logged in successfully")
     return response
 
-@app.get("/logout")
+@app.get("/logout", name="logout")
 async def logout():
     response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie(key="session_token")
@@ -848,7 +848,7 @@ async def evaluate_file(
     except Exception as e:
         print(f"ERROR during evaluation: {e}")
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
-@app.post("/admin/add_language")
+@app.post("/admin/add_language",name="add_language")
 async def add_language(
     language_code: str = Form(...),
     language_name: str = Form(...),
@@ -956,7 +956,7 @@ async def update_language(
     
     return RedirectResponse(url="/admin", status_code=302)
 
-@app.post("/admin/delete_language/{language_id}")
+@app.post("/admin/delete_language/{language_id}",name="delete_language")
 async def delete_language(
     language_id: int,
     user: dict = Depends(get_current_user)
@@ -1085,7 +1085,7 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
         "scorer_exists": False  # Removed scorer functionality
     })
 
-@app.post("/admin/add_user")
+@app.post("/admin/add_user", name="add_user")
 async def add_user(
     username: str = Form(...),
     email: str = Form(...),
@@ -1135,7 +1135,7 @@ async def add_user(
     
     return RedirectResponse(url="/admin", status_code=302)
 
-@app.post("/admin/upload_gold_dataset")
+@app.post("/admin/upload_gold_dataset",name="upload_gold_dataset")
 async def upload_gold_dataset(
     language_id: int = Form(...),
     file: UploadFile = File(...),
