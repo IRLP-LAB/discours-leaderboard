@@ -732,7 +732,7 @@ async def homepage(request: Request):
 @app.get("/home", response_class=HTMLResponse) 
 async def home_redirect(request: Request):
     """Redirect /home to login for backward compatibility"""
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url=request.url_for("homepage"), status_code=302)
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Display the login page"""
@@ -752,7 +752,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     active_sessions[session_token] = user
     
     # Redirect based on user type
-    redirect_url = "/admin" if user['username'] == 'admin' else "/client"
+    redirect_url = request.url_for("admin_dashboard") if user["username"] == "admin" else request.url_for("client_dashboard")
     response = RedirectResponse(url=redirect_url, status_code=302)
     response.set_cookie(key="session_token", value=session_token, httponly=True, max_age=3600)
     
@@ -761,14 +761,14 @@ async def login(request: Request, username: str = Form(...), password: str = For
 
 @app.get("/logout", name="logout")
 async def logout():
-    response = RedirectResponse(url="/", status_code=302)
+    response = RedirectResponse(url=request.url_for("homepage"),status_code=302)
     response.delete_cookie(key="session_token")
     return response
 
 @app.get("/client", response_class=HTMLResponse)
 async def client_dashboard(request: Request, user: dict = Depends(get_current_user)):
     if user['username'] == 'admin':
-        return RedirectResponse(url="/admin", status_code=302)
+        return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
     
     # Get languages from database
     conn = get_db_connection()
@@ -898,8 +898,8 @@ async def add_language(
     else:
         # Add to demo storage
         add_to_demo_languages(language_code, language_name)
-    
-    return RedirectResponse(url="/admin", status_code=302)
+
+    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
 @app.post("/admin/update_language/{language_id}")
 async def update_language(
@@ -953,8 +953,8 @@ async def update_language(
     else:
         # Update demo storage
         update_demo_language(language_id, language_code, language_name)
-    
-    return RedirectResponse(url="/admin", status_code=302)
+
+    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
 @app.post("/admin/delete_language/{language_id}",name="delete_language")
 async def delete_language(
@@ -987,8 +987,8 @@ async def delete_language(
     else:
         # Delete from demo storage
         delete_from_demo_languages(language_id)
-    
-    return RedirectResponse(url="/admin", status_code=302)
+
+    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
 # Helper functions for demo language management
 def add_to_demo_languages(language_code: str, language_name: str):
@@ -1133,7 +1133,7 @@ async def add_user(
         }
         print(f"SUCCESS: User {username} added to demo storage")
     
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
 @app.post("/admin/upload_gold_dataset",name="upload_gold_dataset")
 async def upload_gold_dataset(
@@ -1183,9 +1183,9 @@ async def upload_gold_dataset(
         else:
             # Save to demo data
             add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'])
-        
-        return RedirectResponse(url="/admin", status_code=302)
-        
+
+        return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+
     except Exception as e:
         print(f"ERROR uploading gold dataset: {e}")
         raise HTTPException(status_code=500, detail=f"Error uploading gold dataset: {str(e)}")
@@ -1232,8 +1232,8 @@ async def delete_gold_dataset(
     else:
         # Delete from demo storage
         delete_from_demo_datasets(dataset_id)
-    
-    return RedirectResponse(url="/admin", status_code=302)
+
+    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
 def delete_from_demo_datasets(dataset_id: int):
     """Delete gold dataset from demo storage"""
