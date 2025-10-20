@@ -729,6 +729,7 @@ async def homepage(request: Request):
             },
             "leaderboards": get_demo_leaderboards()
         })
+    
 @app.get("/home", response_class=HTMLResponse) 
 async def home_redirect(request: Request):
     """Redirect /home to login for backward compatibility"""
