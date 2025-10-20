@@ -31,8 +31,8 @@ SECRET_KEY = secrets.token_urlsafe(32)
 DB_CONFIG = {
     'host': 'localhost',
     'database': 'coref_eval_system',
-    'user': 'harsh',
-    'password': 'harsh'
+    'user': 'irlab',
+    'password': 'irlab'
 }
 
 # Demo data - expanded to include evaluation history
@@ -43,7 +43,6 @@ DEMO_USERS = {
 
 DEMO_LANGUAGES = [
     {'id': 1, 'language_code': 'hi', 'language_name': 'Hindi'},
-    {'id': 2, 'language_code': 'en', 'language_name': 'English'}
 ]
 
 # Demo storage for evaluations and gold datasets
@@ -1149,7 +1148,7 @@ async def upload_gold_dataset(
     
     try:
         # Create language-specific directory
-        lang_dir = Path("gold_datasets") / f"lang_{language_id}"
+        lang_dir = Path("/gold_datasets") / f"lang_{language_id}"
         lang_dir.mkdir(exist_ok=True)
         
         # Save file with timestamp

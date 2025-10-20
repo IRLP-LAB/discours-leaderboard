@@ -1,490 +1,532 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Coreference Evaluation System</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - Discourse Evaluation System</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            height: 100vh;
-            overflow: hidden;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #3d6cb9 100%);
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        height: 100vh;
+        overflow: hidden;
+        background: linear-gradient(
+          135deg,
+          #1e3c72 0%,
+          #2a5298 50%,
+          #3d6cb9 100%
+        );
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
-        /* Animated background particles */
-        .particle {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            animation: float 6s infinite ease-in-out;
-        }
+      /* Animated background particles */
+      .particle {
+        position: absolute;
+        width: 3px;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        animation: float 6s infinite ease-in-out;
+      }
 
-        .particle:nth-child(1) {
-            top: 10%;
-            left: 20%;
-            animation-delay: 0s;
-            animation-duration: 8s;
-        }
+      .particle:nth-child(1) {
+        top: 10%;
+        left: 20%;
+        animation-delay: 0s;
+        animation-duration: 8s;
+      }
 
-        .particle:nth-child(2) {
-            top: 80%;
-            left: 70%;
-            animation-delay: 2s;
-            animation-duration: 6s;
-        }
+      .particle:nth-child(2) {
+        top: 80%;
+        left: 70%;
+        animation-delay: 2s;
+        animation-duration: 6s;
+      }
 
-        .particle:nth-child(3) {
-            top: 30%;
-            right: 10%;
-            animation-delay: 4s;
-            animation-duration: 7s;
-        }
+      .particle:nth-child(3) {
+        top: 30%;
+        right: 10%;
+        animation-delay: 4s;
+        animation-duration: 7s;
+      }
 
-        .particle:nth-child(4) {
-            bottom: 20%;
-            left: 10%;
-            animation-delay: 1s;
-            animation-duration: 9s;
-        }
+      .particle:nth-child(4) {
+        bottom: 20%;
+        left: 10%;
+        animation-delay: 1s;
+        animation-duration: 9s;
+      }
 
-        .particle:nth-child(5) {
-            top: 60%;
-            left: 50%;
-            animation-delay: 3s;
-            animation-duration: 5s;
-        }
+      .particle:nth-child(5) {
+        top: 60%;
+        left: 50%;
+        animation-delay: 3s;
+        animation-duration: 5s;
+      }
 
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) scale(1); opacity: 0.7; }
-            33% { transform: translateY(-15px) scale(1.1); opacity: 1; }
-            66% { transform: translateY(15px) scale(0.9); opacity: 0.5; }
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0px) scale(1);
+          opacity: 0.7;
         }
-
-        /* Geometric shapes */
-        .shape {
-            position: absolute;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.08);
-            animation: rotate 20s linear infinite;
+        33% {
+          transform: translateY(-15px) scale(1.1);
+          opacity: 1;
         }
-
-        .shape:nth-child(6) {
-            width: 150px;
-            height: 150px;
-            top: -75px;
-            left: -75px;
-            animation-delay: 0s;
+        66% {
+          transform: translateY(15px) scale(0.9);
+          opacity: 0.5;
         }
+      }
 
-        .shape:nth-child(7) {
-            width: 120px;
-            height: 120px;
-            bottom: -60px;
-            right: -60px;
-            animation-delay: 5s;
+      /* Geometric shapes */
+      .shape {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        animation: rotate 20s linear infinite;
+      }
+
+      .shape:nth-child(6) {
+        width: 150px;
+        height: 150px;
+        top: -75px;
+        left: -75px;
+        animation-delay: 0s;
+      }
+
+      .shape:nth-child(7) {
+        width: 120px;
+        height: 120px;
+        bottom: -60px;
+        right: -60px;
+        animation-delay: 5s;
+      }
+
+      .shape:nth-child(8) {
+        width: 80px;
+        height: 80px;
+        top: 50%;
+        right: -40px;
+        animation-delay: 10s;
+      }
+
+      @keyframes rotate {
+        0% {
+          transform: rotate(0deg) scale(1);
         }
-
-        .shape:nth-child(8) {
-            width: 80px;
-            height: 80px;
-            top: 50%;
-            right: -40px;
-            animation-delay: 10s;
+        50% {
+          transform: rotate(180deg) scale(1.05);
         }
-
-        @keyframes rotate {
-            0% { transform: rotate(0deg) scale(1); }
-            50% { transform: rotate(180deg) scale(1.05); }
-            100% { transform: rotate(360deg) scale(1); }
+        100% {
+          transform: rotate(360deg) scale(1);
         }
+      }
 
+      .login-container {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25),
+          0 0 0 1px rgba(255, 255, 255, 0.2);
+        padding: 30px 35px;
+        width: 420px;
+        max-width: 90vw;
+        max-height: 95vh;
+        text-align: center;
+        position: relative;
+        z-index: 10;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        overflow-y: auto;
+      }
+
+      .logo-container {
+        margin-bottom: 25px;
+      }
+
+      .logo {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        animation: pulse 3s ease-in-out infinite;
+        text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          filter: brightness(1);
+        }
+        50% {
+          transform: scale(1.03);
+          filter: brightness(1.1);
+        }
+      }
+
+      h1 {
+        color: #ffffff;
+        margin-bottom: 8px;
+        font-size: 24px;
+        font-weight: 300;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .subtitle {
+        color: rgba(255, 255, 255, 0.85);
+        margin-bottom: 25px;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .form-group {
+        margin-bottom: 18px;
+        text-align: left;
+        position: relative;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 500;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+      }
+
+      input[type="text"],
+      input[type="password"] {
+        width: 100%;
+        padding: 14px 18px;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        font-size: 15px;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        color: white;
+        transition: all 0.3s ease;
+        outline: none;
+      }
+
+      input[type="text"]::placeholder,
+      input[type="password"]::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      input[type="text"]:focus,
+      input[type="password"]:focus {
+        border-color: rgba(255, 255, 255, 0.6);
+        background: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1),
+          0 6px 20px rgba(0, 0, 0, 0.2);
+        transform: translateY(-1px);
+      }
+
+      .login-btn {
+        width: 100%;
+        padding: 15px 20px;
+        background: linear-gradient(
+          135deg,
+          #4a90e2 0%,
+          #2e5c9a 50%,
+          #1e3c72 100%
+        );
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        box-shadow: 0 8px 25px rgba(30, 60, 114, 0.4);
+        margin-bottom: 20px;
+      }
+
+      .login-btn::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.3),
+          transparent
+        );
+        transition: left 0.6s ease;
+      }
+
+      .login-btn:hover::before {
+        left: 100%;
+      }
+
+      .login-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgba(30, 60, 114, 0.5);
+      }
+
+      .login-btn:active {
+        transform: translateY(0px);
+      }
+
+      .error-message,
+      .success-message {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        font-size: 13px;
+        backdrop-filter: blur(10px);
+        display: none;
+      }
+
+      .error-message {
+        background: rgba(231, 76, 60, 0.9);
+        color: white;
+        border: 1px solid rgba(231, 76, 60, 0.5);
+      }
+
+      .success-message {
+        background: rgba(46, 204, 113, 0.9);
+        color: white;
+        border: 1px solid rgba(46, 204, 113, 0.5);
+      }
+
+      .demo-section {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .demo-section h4 {
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 12px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .credential-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .credential-item:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: translateX(3px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+      }
+
+      .credential-item span {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .credential-item strong {
+        color: #ffffff;
+        font-weight: 600;
+      }
+
+      .copy-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-size: 10px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .copy-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.05);
+      }
+
+      .info-text {
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 11px;
+        line-height: 1.4;
+        margin-bottom: 15px;
+        text-align: center;
+      }
+
+      /* Loading animation */
+      .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top: 3px solid #ffffff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Scrollbar styling for the container */
+      .login-container::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .login-container::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 2px;
+      }
+
+      .login-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+      }
+
+      .login-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.5);
+      }
+
+      @media (max-height: 700px) {
         .login-container {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            box-shadow: 
-                0 20px 40px rgba(0, 0, 0, 0.25),
-                0 0 0 1px rgba(255, 255, 255, 0.2);
-            padding: 30px 35px;
-            width: 420px;
-            max-width: 90vw;
-            max-height: 95vh;
-            text-align: center;
-            position: relative;
-            z-index: 10;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            overflow-y: auto;
-        }
-
-        .logo-container {
-            margin-bottom: 25px;
+          padding: 25px 30px;
+          max-height: 90vh;
         }
 
         .logo {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            animation: pulse 3s ease-in-out infinite;
-            text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); filter: brightness(1); }
-            50% { transform: scale(1.03); filter: brightness(1.1); }
+          font-size: 2rem;
+          margin-bottom: 8px;
         }
 
         h1 {
-            color: #ffffff;
-            margin-bottom: 8px;
-            font-size: 24px;
-            font-weight: 300;
-            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          font-size: 20px;
+          margin-bottom: 6px;
         }
 
         .subtitle {
-            color: rgba(255, 255, 255, 0.85);
-            margin-bottom: 25px;
-            font-size: 13px;
-            line-height: 1.4;
+          font-size: 12px;
+          margin-bottom: 20px;
         }
 
         .form-group {
-            margin-bottom: 18px;
-            text-align: left;
-            position: relative;
+          margin-bottom: 15px;
         }
 
-        label {
-            display: block;
-            margin-bottom: 6px;
-            color: rgba(255, 255, 255, 0.9);
-            font-weight: 500;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-        }
-
-        input[type="text"], input[type="password"] {
-            width: 100%;
-            padding: 14px 18px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            font-size: 15px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            color: white;
-            transition: all 0.3s ease;
-            outline: none;
-        }
-
-        input[type="text"]::placeholder,
-        input[type="password"]::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        input[type="text"]:focus, 
-        input[type="password"]:focus {
-            border-color: rgba(255, 255, 255, 0.6);
-            background: rgba(255, 255, 255, 0.2);
-            box-shadow: 
-                0 0 0 3px rgba(255, 255, 255, 0.1),
-                0 6px 20px rgba(0, 0, 0, 0.2);
-            transform: translateY(-1px);
+        input[type="text"],
+        input[type="password"] {
+          padding: 12px 16px;
+          font-size: 14px;
         }
 
         .login-btn {
-            width: 100%;
-            padding: 15px 20px;
-            background: linear-gradient(135deg, #4a90e2 0%, #2e5c9a 50%, #1e3c72 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            box-shadow: 0 8px 25px rgba(30, 60, 114, 0.4);
-            margin-bottom: 20px;
+          padding: 13px 18px;
+          font-size: 14px;
+        }
+      }
+
+      @media (max-height: 600px) {
+        .login-container {
+          padding: 20px 25px;
+          max-height: 85vh;
         }
 
-        .login-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            transition: left 0.6s ease;
-        }
-
-        .login-btn:hover::before {
-            left: 100%;
-        }
-
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(30, 60, 114, 0.5);
-        }
-
-        .login-btn:active {
-            transform: translateY(0px);
-        }
-
-        .error-message, .success-message {
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-size: 13px;
-            backdrop-filter: blur(10px);
-            display: none;
-        }
-
-        .error-message {
-            background: rgba(231, 76, 60, 0.9);
-            color: white;
-            border: 1px solid rgba(231, 76, 60, 0.5);
-        }
-
-        .success-message {
-            background: rgba(46, 204, 113, 0.9);
-            color: white;
-            border: 1px solid rgba(46, 204, 113, 0.5);
+        .logo-container {
+          margin-bottom: 15px;
         }
 
         .demo-section {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
+          margin-top: 15px;
+          padding-top: 15px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .login-container {
+          width: 95vw;
+          padding: 25px 20px;
+          margin: 10px;
         }
 
-        .demo-section h4 {
-            color: rgba(255, 255, 255, 0.9);
-            margin-bottom: 12px;
-            font-size: 14px;
-            font-weight: 500;
+        .logo {
+          font-size: 2rem;
+        }
+
+        h1 {
+          font-size: 20px;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        .login-btn {
+          padding: 12px 16px;
+          font-size: 14px;
         }
 
         .credential-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            padding: 10px 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .credential-item:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateX(3px);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+          padding: 8px 10px;
         }
 
         .credential-item span {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.9);
+          font-size: 11px;
+        }
+      }
+
+      @media (max-width: 360px) {
+        .login-container {
+          padding: 20px 15px;
         }
 
-        .credential-item strong {
-            color: #ffffff;
-            font-weight: 600;
+        .credential-item {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 5px;
         }
 
         .copy-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            cursor: pointer;
-            font-size: 10px;
-            padding: 4px 8px;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+          align-self: flex-end;
         }
-
-        .copy-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
-
-        .info-text {
-            color: rgba(255, 255, 255, 0.75);
-            font-size: 11px;
-            line-height: 1.4;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        /* Loading animation */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top: 3px solid #ffffff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Scrollbar styling for the container */
-        .login-container::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .login-container::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
-        }
-
-        .login-container::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
-        }
-
-        .login-container::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
-        }
-
-        @media (max-height: 700px) {
-            .login-container {
-                padding: 25px 30px;
-                max-height: 90vh;
-            }
-            
-            .logo {
-                font-size: 2rem;
-                margin-bottom: 8px;
-            }
-            
-            h1 {
-                font-size: 20px;
-                margin-bottom: 6px;
-            }
-
-            .subtitle {
-                font-size: 12px;
-                margin-bottom: 20px;
-            }
-
-            .form-group {
-                margin-bottom: 15px;
-            }
-
-            input[type="text"], 
-            input[type="password"] {
-                padding: 12px 16px;
-                font-size: 14px;
-            }
-
-            .login-btn {
-                padding: 13px 18px;
-                font-size: 14px;
-            }
-        }
-
-        @media (max-height: 600px) {
-            .login-container {
-                padding: 20px 25px;
-                max-height: 85vh;
-            }
-
-            .logo-container {
-                margin-bottom: 15px;
-            }
-
-            .demo-section {
-                margin-top: 15px;
-                padding-top: 15px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .login-container {
-                width: 95vw;
-                padding: 25px 20px;
-                margin: 10px;
-            }
-            
-            .logo {
-                font-size: 2rem;
-            }
-            
-            h1 {
-                font-size: 20px;
-            }
-
-            input[type="text"], 
-            input[type="password"],
-            .login-btn {
-                padding: 12px 16px;
-                font-size: 14px;
-            }
-
-            .credential-item {
-                padding: 8px 10px;
-            }
-
-            .credential-item span {
-                font-size: 11px;
-            }
-        }
-
-        @media (max-width: 360px) {
-            .login-container {
-                padding: 20px 15px;
-            }
-            
-            .credential-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 5px;
-            }
-
-            .copy-btn {
-                align-self: flex-end;
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <!-- Animated background elements -->
     <div class="particle"></div>
     <div class="particle"></div>
@@ -496,135 +538,183 @@
     <div class="shape"></div>
 
     <div class="login-container">
-        <div class="logo-container">
-            <div class="logo">🎯</div>
-            <h1>Coreference Evaluation</h1>
-            <p class="subtitle">Advanced linguistic analysis platform for coreference resolution evaluation</p>
-        </div>
-
-        <div id="errorMessage" class="error-message"></div>
-        <div id="successMessage" class="success-message"></div>
-
-        <form id="loginForm" method="post" action="/login">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Enter your username" required autocomplete="username">
-            </div>
-
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
-            </div>
-
-            <button type="submit" class="login-btn">
-                Sign In
-            </button>
-        </form>
-
-        <p class="info-text">
-            Evaluate coreference resolution outputs using MUC, B-CUBED, CEAF, and BLANC metrics. Contact your administrator for account access.
+      <div class="logo-container">
+        <div class="logo">🎯</div>
+        <h1>Discourse Evaluation System</h1>
+        <p class="subtitle">
+          Advancing the field of discourse resolution through rigorous
+          evaluation and collaborative research
         </p>
+      </div>
 
-        <div class="demo-section">
-            <h4>🧪 Demo Credentials</h4>
-            <div class="credential-item" onclick="fillCredentials('testuser', 'user123')">
-                <span>User: <strong>testuser</strong> | Pass: <strong>user123</strong></span>
-                <button type="button" class="copy-btn" onclick="event.stopPropagation(); copyCredentials('testuser', 'user123')">Use</button>
-            </div>
-            <div class="credential-item" onclick="fillCredentials('admin', 'admin123')">
-                <span>Admin: <strong>admin</strong> | Pass: <strong>admin123</strong></span>
-                <button type="button" class="copy-btn" onclick="event.stopPropagation(); copyCredentials('admin', 'admin123')">Use</button>
-            </div>
+      <div id="errorMessage" class="error-message"></div>
+      <div id="successMessage" class="success-message"></div>
+
+      <form id="loginForm" method="post" action="/login">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="Enter your username"
+            required
+            autocomplete="username"
+          />
         </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Enter your password"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button type="submit" class="login-btn">Sign In</button>
+      </form>
+
+      <p class="info-text">
+        Evaluate discourse using MUC, B-CUBED, CEAF, and BLANC metrics. Contact
+        administrator for account access.
+      </p>
+
+      <div class="demo-section">
+        <h4>🧪 Demo Credentials</h4>
+        <div
+          class="credential-item"
+          onclick="fillCredentials('testuser', 'user123')"
+        >
+          <span
+            >User: <strong>testuser</strong> | Pass:
+            <strong>user123</strong></span
+          >
+          <button
+            type="button"
+            class="copy-btn"
+            onclick="event.stopPropagation(); copyCredentials('testuser', 'user123')"
+          >
+            Use
+          </button>
+        </div>
+        <div
+          class="credential-item"
+          onclick="fillCredentials('admin', 'admin123')"
+        >
+          <span
+            >Admin: <strong>admin</strong> | Pass:
+            <strong>admin123</strong></span
+          >
+          <button
+            type="button"
+            class="copy-btn"
+            onclick="event.stopPropagation(); copyCredentials('admin', 'admin123')"
+          >
+            Use
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-spinner"></div>
+      <div class="loading-spinner"></div>
     </div>
 
     <script>
-        function fillCredentials(username, password) {
-            document.getElementById('username').value = username;
-            document.getElementById('password').value = password;
-            
-            // Add a subtle animation to indicate the fields were filled
-            const usernameField = document.getElementById('username');
-            const passwordField = document.getElementById('password');
-            
-            usernameField.style.transform = 'scale(1.03)';
-            passwordField.style.transform = 'scale(1.03)';
-            
-            setTimeout(() => {
-                usernameField.style.transform = 'scale(1)';
-                passwordField.style.transform = 'scale(1)';
-            }, 200);
-        }
+      function fillCredentials(username, password) {
+        document.getElementById("username").value = username;
+        document.getElementById("password").value = password;
 
-        function copyCredentials(username, password) {
-            fillCredentials(username, password);
-            showMessage('Credentials filled! You can now sign in.', 'success');
-        }
+        // Add a subtle animation to indicate the fields were filled
+        const usernameField = document.getElementById("username");
+        const passwordField = document.getElementById("password");
 
-        function showMessage(message, type = 'error') {
-            const errorDiv = document.getElementById('errorMessage');
-            const successDiv = document.getElementById('successMessage');
-            
-            if (type === 'success') {
-                successDiv.textContent = message;
-                successDiv.style.display = 'block';
-                errorDiv.style.display = 'none';
-                setTimeout(() => { successDiv.style.display = 'none'; }, 3000);
-            } else {
-                errorDiv.textContent = message;
-                errorDiv.style.display = 'block';
-                successDiv.style.display = 'none';
-                setTimeout(() => { errorDiv.style.display = 'none'; }, 5000);
-            }
-        }
+        usernameField.style.transform = "scale(1.03)";
+        passwordField.style.transform = "scale(1.03)";
 
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            // Show loading overlay
-            document.getElementById('loadingOverlay').style.display = 'flex';
-            
-            // Hide any existing messages
-            document.getElementById('errorMessage').style.display = 'none';
-            document.getElementById('successMessage').style.display = 'none';
+        setTimeout(() => {
+          usernameField.style.transform = "scale(1)";
+          passwordField.style.transform = "scale(1)";
+        }, 200);
+      }
+
+      function copyCredentials(username, password) {
+        fillCredentials(username, password);
+        showMessage("Credentials filled! You can now sign in.", "success");
+      }
+
+      function showMessage(message, type = "error") {
+        const errorDiv = document.getElementById("errorMessage");
+        const successDiv = document.getElementById("successMessage");
+
+        if (type === "success") {
+          successDiv.textContent = message;
+          successDiv.style.display = "block";
+          errorDiv.style.display = "none";
+          setTimeout(() => {
+            successDiv.style.display = "none";
+          }, 3000);
+        } else {
+          errorDiv.textContent = message;
+          errorDiv.style.display = "block";
+          successDiv.style.display = "none";
+          setTimeout(() => {
+            errorDiv.style.display = "none";
+          }, 5000);
+        }
+      }
+
+      document
+        .getElementById("loginForm")
+        .addEventListener("submit", function (e) {
+          // Show loading overlay
+          document.getElementById("loadingOverlay").style.display = "flex";
+
+          // Hide any existing messages
+          document.getElementById("errorMessage").style.display = "none";
+          document.getElementById("successMessage").style.display = "none";
         });
 
-        // Check for error message from server (if redirected back with error)
-        window.onload = function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const error = urlParams.get('error');
-            if (error) {
-                showMessage(decodeURIComponent(error), 'error');
-            }
-        };
+      // Check for error message from server (if redirected back with error)
+      window.onload = function () {
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get("error");
+        if (error) {
+          showMessage(decodeURIComponent(error), "error");
+        }
+      };
 
-        // Add keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            // Ctrl/Cmd + 1 for test user
-            if ((e.ctrlKey || e.metaKey) && e.key === '1') {
-                e.preventDefault();
-                fillCredentials('testuser', 'user123');
-            }
-            // Ctrl/Cmd + 2 for admin
-            if ((e.ctrlKey || e.metaKey) && e.key === '2') {
-                e.preventDefault();
-                fillCredentials('admin', 'admin123');
-            }
+      // Add keyboard shortcuts
+      document.addEventListener("keydown", function (e) {
+        // Ctrl/Cmd + 1 for test user
+        if ((e.ctrlKey || e.metaKey) && e.key === "1") {
+          e.preventDefault();
+          fillCredentials("testuser", "user123");
+        }
+        // Ctrl/Cmd + 2 for admin
+        if ((e.ctrlKey || e.metaKey) && e.key === "2") {
+          e.preventDefault();
+          fillCredentials("admin", "admin123");
+        }
+      });
+
+      // Add focus animations
+      const inputs = document.querySelectorAll(
+        'input[type="text"], input[type="password"]'
+      );
+      inputs.forEach((input) => {
+        input.addEventListener("focus", function () {
+          this.parentElement.style.transform = "scale(1.01)";
         });
 
-        // Add focus animations
-        const inputs = document.querySelectorAll('input[type="text"], input[type="password"]');
-        inputs.forEach(input => {
-            input.addEventListener('focus', function() {
-                this.parentElement.style.transform = 'scale(1.01)';
-            });
-            
-            input.addEventListener('blur', function() {
-                this.parentElement.style.transform = 'scale(1)';
-            });
+        input.addEventListener("blur", function () {
+          this.parentElement.style.transform = "scale(1)";
         });
+      });
     </script>
-</body>
+  </body>
 </html>
