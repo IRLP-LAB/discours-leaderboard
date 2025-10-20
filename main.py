@@ -751,7 +751,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     active_sessions[session_token] = user
     
     # Redirect based on user type
-    redirect_url = "/admin" if user['username'] == 'admin' else "/client"
+    redirect_url = "admin" if user['username'] == 'admin' else "client"
     response = RedirectResponse(url=redirect_url, status_code=302)
     response.set_cookie(key="session_token", value=session_token, httponly=True, max_age=3600)
     
