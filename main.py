@@ -731,11 +731,11 @@ async def homepage(request: Request):
 async def home_redirect(request: Request):
     """Redirect /home to login for backward compatibility"""
     return RedirectResponse(url="/", status_code=302)
-@app.get("/login", response_class=HTMLResponse)
+@app.get("/login", response_class=HTMLResponse, name=)
 async def login_page(request: Request):
     """Display the login page"""
     return templates.TemplateResponse("login.html", {"request": request})
-@app.post("/login")
+@app.post("/login",name="login_page")
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
     user = authenticate_user(username, password)
     
@@ -757,7 +757,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     print(f"SUCCESS: User {username} logged in successfully")
     return response
 
-@app.get("/logout")
+@app.get("/logout",name="logout")
 async def logout():
     response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie(key="session_token")
@@ -794,7 +794,7 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
         "history": history
     })
 
-@app.post("/evaluate")
+@app.post("/evaluate", name="evaluate")
 async def evaluate_file(
     language_id: int = Form(...),
     file: UploadFile = File(...),
@@ -846,7 +846,7 @@ async def evaluate_file(
     except Exception as e:
         print(f"ERROR during evaluation: {e}")
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
-@app.post("/admin/add_language")
+@app.post("/admin/add_language", name="admin_add_language")
 async def add_language(
     language_code: str = Form(...),
     language_name: str = Form(...),
@@ -954,7 +954,7 @@ async def update_language(
     
     return RedirectResponse(url="/admin", status_code=302)
 
-@app.post("/admin/delete_language/{language_id}")
+@app.post("/admin/delete_language/{lang_id}", name="admin_delete_language")
 async def delete_language(
     language_id: int,
     user: dict = Depends(get_current_user)
@@ -1083,7 +1083,7 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
         "scorer_exists": False  # Removed scorer functionality
     })
 
-@app.post("/admin/add_user")
+@app.post("/admin/add_user", name="admin_add_user")
 async def add_user(
     username: str = Form(...),
     email: str = Form(...),
@@ -1133,7 +1133,7 @@ async def add_user(
     
     return RedirectResponse(url="/admin", status_code=302)
 
-@app.post("/admin/upload_gold_dataset")
+@app.post("/admin/upload_gold_dataset", name="admin_upload_gold_dataset")
 async def upload_gold_dataset(
     language_id: int = Form(...),
     file: UploadFile = File(...),
@@ -1147,7 +1147,7 @@ async def upload_gold_dataset(
     
     try:
         # Create language-specific directory
-        lang_dir = Path("/gold_datasets") / f"lang_{language_id}"
+        lang_dir = Path("gold_datasets") / f"lang_{language_id}"
         lang_dir.mkdir(exist_ok=True)
         
         # Save file with timestamp
@@ -1187,7 +1187,7 @@ async def upload_gold_dataset(
     except Exception as e:
         print(f"ERROR uploading gold dataset: {e}")
         raise HTTPException(status_code=500, detail=f"Error uploading gold dataset: {str(e)}")
-@app.post("/admin/delete_gold_dataset/{dataset_id}")
+@app.post("/admin/delete_gold_dataset/{dataset_id}", name="admin_delete_gold_dataset")
 async def delete_gold_dataset(
     dataset_id: int,
     user: dict = Depends(get_current_user)

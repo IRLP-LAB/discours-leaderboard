@@ -1,459 +1,494 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Client Dashboard - Coreference Evaluation</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
+      body {
+        font-family: "Arial", sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: #333;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .header-content h1 {
+        color: #764ba2;
+        margin-bottom: 10px;
+      }
+
+      .welcome-text {
+        color: #666;
+        font-size: 16px;
+      }
+
+      .logout-btn {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .logout-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+      }
+
+      .main-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .card h2 {
+        color: #764ba2;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #667eea;
+        padding-bottom: 10px;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #555;
+      }
+
+      select,
+      input[type="file"] {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.3s ease;
+      }
+
+      select:focus,
+      input[type="file"]:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        width: 100%;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .history-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        font-size: 14px;
+      }
+
+      .history-table th,
+      .history-table td {
+        padding: 10px 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      .history-table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+        color: #555;
+        font-size: 12px;
+      }
+
+      .history-table tr:hover {
+        background-color: #f5f5f5;
+      }
+
+      .score {
+        font-weight: bold;
+        color: #28a745;
+        font-size: 12px;
+      }
+
+      .no-history {
+        text-align: center;
+        color: #666;
+        padding: 40px 0;
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        color: #667eea;
+        margin-top: 20px;
+      }
+
+      .results {
+        display: none;
+        margin-top: 20px;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #28a745;
+      }
+
+      .metric-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding: 8px;
+        background-color: white;
+        border-radius: 4px;
+      }
+
+      .metric-name {
+        font-weight: bold;
+        color: #555;
+      }
+
+      .metric-values {
+        display: flex;
+        gap: 20px;
+      }
+
+      .metric-value {
+        color: #28a745;
+        font-weight: bold;
+      }
+
+      .success-message {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 10px;
+        border-radius: 5px;
+        margin-top: 10px;
+        border: 1px solid #c3e6cb;
+      }
+
+      .refresh-btn {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-top: 10px;
+        transition: all 0.3s ease;
+      }
+
+      .refresh-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(40, 167, 69, 0.4);
+      }
+
+      @media (max-width: 768px) {
+        .main-content {
+          grid-template-columns: 1fr;
         }
 
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+          padding: 10px;
         }
 
         .header {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .header-content h1 {
-            color: #764ba2;
-            margin-bottom: 10px;
-        }
-
-        .welcome-text {
-            color: #666;
-            font-size: 16px;
+          flex-direction: column;
+          gap: 15px;
+          text-align: center;
         }
 
         .logout-btn {
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
-        }
-
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .card h2 {
-            color: #764ba2;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #667eea;
-            padding-bottom: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #555;
-        }
-
-        select, input[type="file"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
-
-        select:focus, input[type="file"]:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            width: 100%;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
+          align-self: stretch;
+          justify-content: center;
         }
 
         .history-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 14px;
+          font-size: 12px;
         }
 
         .history-table th,
         .history-table td {
-            padding: 10px 8px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .history-table th {
-            background-color: #f8f9fa;
-            font-weight: bold;
-            color: #555;
-            font-size: 12px;
-        }
-
-        .history-table tr:hover {
-            background-color: #f5f5f5;
-        }
-
-        .score {
-            font-weight: bold;
-            color: #28a745;
-            font-size: 12px;
-        }
-
-        .no-history {
-            text-align: center;
-            color: #666;
-            padding: 40px 0;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            color: #667eea;
-            margin-top: 20px;
-        }
-
-        .results {
-            display: none;
-            margin-top: 20px;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid #28a745;
-        }
-
-        .metric-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            padding: 8px;
-            background-color: white;
-            border-radius: 4px;
-        }
-
-        .metric-name {
-            font-weight: bold;
-            color: #555;
+          padding: 6px 4px;
         }
 
         .metric-values {
-            display: flex;
-            gap: 20px;
+          gap: 10px;
         }
-
-        .metric-value {
-            color: #28a745;
-            font-weight: bold;
-        }
-
-        .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            border: 1px solid #c3e6cb;
-        }
-
-        .refresh-btn {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-top: 10px;
-            transition: all 0.3s ease;
-        }
-
-        .refresh-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 3px 10px rgba(40, 167, 69, 0.4);
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            
-            .container {
-                padding: 10px;
-            }
-
-            .header {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-
-            .logout-btn {
-                align-self: stretch;
-                justify-content: center;
-            }
-
-            .history-table {
-                font-size: 12px;
-            }
-
-            .history-table th,
-            .history-table td {
-                padding: 6px 4px;
-            }
-
-            .metric-values {
-                gap: 10px;
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <div class="header-content">
-                <h1>🎯 Discourse Evaluation System</h1>
-                <p class="welcome-text">Welcome, {{ user.username }}! Upload your discourse output files for evaluation.</p>
+      <div class="header">
+        <div class="header-content">
+          <h1>🎯 Discourse Evaluation System</h1>
+          <p class="welcome-text">
+            Welcome, {{ user.username }}! Upload your discourse output files for
+            evaluation.
+          </p>
+        </div>
+        <a href="{{ url_for('logout') }}" class="logout-btn"> 🚪 Logout </a>
+      </div>
+
+      <div class="main-content">
+        <div class="card">
+          <h2>📤 Upload & Evaluate</h2>
+          <form id="evaluationForm" enctype="multipart/form-data">
+            <div class="form-group">
+              <label for="language">Select Language:</label>
+              <select id="language" name="language_id" required>
+                <option value="">Choose a language...</option>
+                {% for lang in languages %}
+                <option value="{{ lang.id }}">
+                  {{ lang.language_name }} ({{ lang.language_code }})
+                </option>
+                {% endfor %}
+              </select>
             </div>
-            <a href="/logout" class="logout-btn">
-                🚪 Logout
-            </a>
+
+            <div class="form-group">
+              <label for="file">Upload Your Output File (.txt):</label>
+              <input type="file" id="file" name="file" accept=".txt" required />
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">
+              🚀 Evaluate File
+            </button>
+          </form>
+
+          <div class="loading" id="loading">
+            <p>⏳ Evaluating your file... Please wait.</p>
+          </div>
+
+          <div class="results" id="results">
+            <h3>📊 Evaluation Results</h3>
+            <div id="scoresContainer"></div>
+            <div
+              id="successMessage"
+              class="success-message"
+              style="display: none"
+            >
+              ✅ Evaluation completed successfully! Results saved to history.
+            </div>
+            <button
+              class="refresh-btn"
+              id="refreshBtn"
+              onclick="refreshHistory()"
+              style="display: none"
+            >
+              🔄 Refresh History
+            </button>
+          </div>
         </div>
 
-        <div class="main-content">
-            <div class="card">
-                <h2>📤 Upload & Evaluate</h2>
-                <form id="evaluationForm" enctype="multipart/form-data">
-                    <div class="form-group">
-                        <label for="language">Select Language:</label>
-                        <select id="language" name="language_id" required>
-                            <option value="">Choose a language...</option>
-                            {% for lang in languages %}
-                            <option value="{{ lang.id }}">{{ lang.language_name }} ({{ lang.language_code }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="file">Upload Your Output File (.txt):</label>
-                        <input type="file" id="file" name="file" accept=".txt" required>
-                    </div>
-
-                    <button type="submit" class="btn" id="submitBtn">
-                        🚀 Evaluate File
-                    </button>
-                </form>
-
-                <div class="loading" id="loading">
-                    <p>⏳ Evaluating your file... Please wait.</p>
-                </div>
-
-                <div class="results" id="results">
-                    <h3>📊 Evaluation Results</h3>
-                    <div id="scoresContainer"></div>
-                    <div id="successMessage" class="success-message" style="display: none;">
-                        ✅ Evaluation completed successfully! Results saved to history.
-                    </div>
-                    <button class="refresh-btn" id="refreshBtn" onclick="refreshHistory()" style="display: none;">
-                        🔄 Refresh History
-                    </button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>📈 Evaluation History</h2>
-                {% if history %}
-                <div style="overflow-x: auto;">
-                    <table class="history-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>File</th>
-                                <th>Language</th>
-                                <th>MUC F1</th>
-                                <th>B-CUBED F1</th>
-                                <th>CEAF-M F1</th>
-                                <th>BLANC F1</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for eval in history %}
-                            <tr>
-                                <td>{{ eval.formatted_date }}</td>
-                                <td>{{ eval.uploaded_filename }}</td>
-                                <td>{{ eval.language_name }}</td>
-                                <td class="score">{{ "%.4f"|format(eval.muc_f1) if eval.muc_f1 else "N/A" }}</td>
-                                <td class="score">{{ "%.4f"|format(eval.bcub_f1) if eval.bcub_f1 else "N/A" }}</td>
-                                <td class="score">{{ "%.4f"|format(eval.ceafm_f1) if eval.ceafm_f1 else "N/A" }}</td>
-                                <td class="score">{{ "%.4f"|format(eval.blanc_f1) if eval.blanc_f1 else "N/A" }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="no-history">
-                    <p>📝 No evaluation history yet. Upload your first file to get started!</p>
-                </div>
-                {% endif %}
-            </div>
+        <div class="card">
+          <h2>📈 Evaluation History</h2>
+          {% if history %}
+          <div style="overflow-x: auto">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>File</th>
+                  <th>Language</th>
+                  <th>MUC F1</th>
+                  <th>B-CUBED F1</th>
+                  <th>CEAF-M F1</th>
+                  <th>BLANC F1</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for eval in history %}
+                <tr>
+                  <td>{{ eval.formatted_date }}</td>
+                  <td>{{ eval.uploaded_filename }}</td>
+                  <td>{{ eval.language_name }}</td>
+                  <td class="score">
+                    {{ "%.4f"|format(eval.muc_f1) if eval.muc_f1 else "N/A" }}
+                  </td>
+                  <td class="score">
+                    {{ "%.4f"|format(eval.bcub_f1) if eval.bcub_f1 else "N/A" }}
+                  </td>
+                  <td class="score">
+                    {{ "%.4f"|format(eval.ceafm_f1) if eval.ceafm_f1 else "N/A"
+                    }}
+                  </td>
+                  <td class="score">
+                    {{ "%.4f"|format(eval.blanc_f1) if eval.blanc_f1 else "N/A"
+                    }}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="no-history">
+            <p>
+              📝 No evaluation history yet. Upload your first file to get
+              started!
+            </p>
+          </div>
+          {% endif %}
         </div>
+      </div>
     </div>
 
     <script>
-        document.getElementById('evaluationForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const submitBtn = document.getElementById('submitBtn');
-            const loading = document.getElementById('loading');
-            const results = document.getElementById('results');
-            
-            // Show loading state
-            submitBtn.disabled = true;
-            submitBtn.textContent = '⏳ Evaluating...';
-            loading.style.display = 'block';
-            results.style.display = 'none';
-            
-            try {
-                const response = await fetch('/evaluate', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    displayResults(data.scores);
-                    showSuccessMessage();
-                    // Reset form
-                    document.getElementById('evaluationForm').reset();
-                } else {
-                    alert('Error: ' + (data.detail || 'Unknown error occurred'));
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            } finally {
-                // Reset form state
-                submitBtn.disabled = false;
-                submitBtn.textContent = '🚀 Evaluate File';
-                loading.style.display = 'none';
+      document
+        .getElementById("evaluationForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+
+          const formData = new FormData(this);
+          const submitBtn = document.getElementById("submitBtn");
+          const loading = document.getElementById("loading");
+          const results = document.getElementById("results");
+
+          // Show loading state
+          submitBtn.disabled = true;
+          submitBtn.textContent = "⏳ Evaluating...";
+          loading.style.display = "block";
+          results.style.display = "none";
+
+          try {
+            const response = await fetch("{{ url_for('evaluate') }}", {
+              method: "POST",
+              body: formData,
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+              displayResults(data.scores);
+              showSuccessMessage();
+              // Reset form
+              document.getElementById("evaluationForm").reset();
+            } else {
+              alert("Error: " + (data.detail || "Unknown error occurred"));
             }
+          } catch (error) {
+            alert("Error: " + error.message);
+          } finally {
+            // Reset form state
+            submitBtn.disabled = false;
+            submitBtn.textContent = "🚀 Evaluate File";
+            loading.style.display = "none";
+          }
         });
-        
-        function displayResults(scores) {
-            const container = document.getElementById('scoresContainer');
-            const results = document.getElementById('results');
-            
-            let html = '';
-            
-            const metrics = [
-                { name: 'MUC', key: 'muc' },
-                { name: 'B-CUBED', key: 'bcub' },
-                { name: 'CEAF-M', key: 'ceafm' },
-                { name: 'CEAF-E', key: 'ceafe' },
-                { name: 'BLANC', key: 'blanc' }
-            ];
-            
-            metrics.forEach(metric => {
-                if (scores[metric.key]) {
-                    const score = scores[metric.key];
-                    html += `
+
+      function displayResults(scores) {
+        const container = document.getElementById("scoresContainer");
+        const results = document.getElementById("results");
+
+        let html = "";
+
+        const metrics = [
+          { name: "MUC", key: "muc" },
+          { name: "B-CUBED", key: "bcub" },
+          { name: "CEAF-M", key: "ceafm" },
+          { name: "CEAF-E", key: "ceafe" },
+          { name: "BLANC", key: "blanc" },
+        ];
+
+        metrics.forEach((metric) => {
+          if (scores[metric.key]) {
+            const score = scores[metric.key];
+            html += `
                         <div class="metric-row">
                             <span class="metric-name">${metric.name}</span>
                             <div class="metric-values">
-                                <span class="metric-value">R: ${score.recall.toFixed(4)}</span>
-                                <span class="metric-value">P: ${score.precision.toFixed(4)}</span>
-                                <span class="metric-value">F1: ${score.f1.toFixed(4)}</span>
+                                <span class="metric-value">R: ${score.recall.toFixed(
+                                  4
+                                )}</span>
+                                <span class="metric-value">P: ${score.precision.toFixed(
+                                  4
+                                )}</span>
+                                <span class="metric-value">F1: ${score.f1.toFixed(
+                                  4
+                                )}</span>
                             </div>
                         </div>
                     `;
-                }
-            });
-            
-            container.innerHTML = html;
-            results.style.display = 'block';
-        }
+          }
+        });
 
-        function showSuccessMessage() {
-            const successMessage = document.getElementById('successMessage');
-            const refreshBtn = document.getElementById('refreshBtn');
-            successMessage.style.display = 'block';
-            refreshBtn.style.display = 'inline-block';
-        }
+        container.innerHTML = html;
+        results.style.display = "block";
+      }
 
-        function refreshHistory() {
-            window.location.reload();
-        }
+      function showSuccessMessage() {
+        const successMessage = document.getElementById("successMessage");
+        const refreshBtn = document.getElementById("refreshBtn");
+        successMessage.style.display = "block";
+        refreshBtn.style.display = "inline-block";
+      }
+
+      function refreshHistory() {
+        window.location.reload();
+      }
     </script>
-</body>
+  </body>
 </html>

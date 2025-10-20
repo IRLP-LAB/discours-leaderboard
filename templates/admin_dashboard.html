@@ -353,7 +353,7 @@
             <div class="form-grid">
                 <div class="form-section">
                     <h3>Add New User</h3>
-                    <form method="post" action="/admin/add_user">
+                    <form method="post" action="{{ url_for('admin_add_user') }}>
                         <div class="form-group">
                             <label for="username">Username:</label>
                             <input type="text" id="username" name="username" required>
@@ -394,7 +394,7 @@
                                     <td>
                                         <div class="action-buttons">
                                             <button class="btn btn-small" onclick="editUser('{{ user.id }}', '{{ user.username }}', '{{ user.email }}', '{{ user.is_active|lower }}')">Edit</button>
-                                            <form method="post" action="/admin/delete_user/{{ user.id }}" style="display: inline;" onsubmit="return confirm('Are you sure?')">
+                                            <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }} style="display: inline;" onsubmit="return confirm('Are you sure?')">
                                                 <button type="submit" class="btn btn-danger btn-small">Delete</button>
                                             </form>
                                         </div>
@@ -419,7 +419,7 @@
             <div class="form-grid">
                 <div class="form-section">
                     <h3>Add New Language</h3>
-                    <form method="post" action="/admin/add_language">
+                    <form method="post" action="{{ url_for('admin_add_language') }}>
                         <div class="form-group">
                             <label for="language_code">Language Code:</label>
                             <input type="text" id="language_code" name="language_code" placeholder="e.g., en, hi, fr" maxlength="10" required>
@@ -461,7 +461,7 @@
                                     <td>
                                         <div class="action-buttons">
                                             <button class="btn btn-small" onclick="editLanguage('{{ lang.id }}', '{{ lang.language_code }}', '{{ lang.language_name }}')">Edit</button>
-                                            <form method="post" action="/admin/delete_language/{{ lang.id }}" style="display: inline;" onsubmit="return confirmLanguageDelete('{{ lang.language_name }}')">
+                                            <form method="post" action="{{ url_for('admin_delete_language', lang_id=lang.id) }}" style="display: inline;" onsubmit="return confirmLanguageDelete('{{ lang.language_name }}')">
                                                 <button type="submit" class="btn btn-danger btn-small">Delete</button>
                                             </form>
                                         </div>
@@ -486,7 +486,7 @@
             <div class="form-grid">
                 <div class="form-section">
                     <h3>Upload Gold Dataset</h3>
-                    <form method="post" action="/admin/upload_gold_dataset" enctype="multipart/form-data">
+                    <form method="post" action="{{ url_for('admin_upload_gold_dataset') }} enctype="multipart/form-data">
                         <div class="form-group">
                             <label for="language_id">Language:</label>
                             <select id="language_id" name="language_id" required>
@@ -540,7 +540,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <form method="post" action="/admin/delete_gold_dataset/{{ dataset.id }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this gold dataset?')">
+                                        <form method="post" action="{{ url_for('admin_delete_gold_dataset', dataset_id=dataset.id) }} style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this gold dataset?')">
                                             <button type="submit" class="btn btn-danger btn-small">Delete</button>
                                         </form>
                                     </td>
