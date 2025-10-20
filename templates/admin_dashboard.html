@@ -322,7 +322,7 @@
             Manage users, languages, gold datasets, and system configuration
           </p>
         </div>
-        <a href="logout" class="logout-btn"> Logout </a>
+        <a href="/logout" class="logout-btn"> Logout </a>
       </div>
 
       <div class="admin-stats">
@@ -364,7 +364,7 @@
         <div class="form-grid">
           <div class="form-section">
             <h3>Add New User</h3>
-            <form method="post" action="admin/add_user">
+            <form method="post" action="/admin/add_user">
               <div class="form-group">
                 <label for="username">Username:</label>
                 <input type="text" id="username" name="username" required />
@@ -414,7 +414,7 @@
                         </button>
                         <form
                           method="post"
-                          action="admin/delete_user/{{ user.id }}"
+                          action="/admin/delete_user/{{ user.id }}"
                           style="display: inline"
                           onsubmit="return confirm('Are you sure?')"
                         >
@@ -449,7 +449,7 @@
         <div class="form-grid">
           <div class="form-section">
             <h3>Add New Language</h3>
-            <form method="post" action="admin/add_language">
+            <form method="post" action="/admin/add_language">
               <div class="form-group">
                 <label for="language_code">Language Code:</label>
                 <input
@@ -520,7 +520,7 @@
                         </button>
                         <form
                           method="post"
-                          action="admin/delete_language/{{ lang.id }}"
+                          action="/admin/delete_language/{{ lang.id }}"
                           style="display: inline"
                           onsubmit="return confirmLanguageDelete('{{ lang.language_name }}')"
                         >
@@ -557,7 +557,7 @@
             <h3>Upload Gold Dataset</h3>
             <form
               method="post"
-              action="admin/upload_gold_dataset"
+              action="/admin/upload_gold_dataset"
               enctype="multipart/form-data"
             >
               <div class="form-group">
@@ -621,7 +621,7 @@
                     <td>
                       <form
                         method="post"
-                        action="admin/delete_gold_dataset/{{ dataset.id }}"
+                        action="/admin/delete_gold_dataset/{{ dataset.id }}"
                         style="display: inline"
                         onsubmit="return confirm('Are you sure you want to delete this gold dataset?')"
                       >
@@ -833,7 +833,7 @@
         document.getElementById("edit_is_active").checked = isActive === "true";
         document.getElementById(
           "editUserForm"
-        ).action = `admin/update_user/${id}`;
+        ).action = `/admin/update_user/${id}`;
         document.getElementById("editUserModal").style.display = "block";
       }
 
@@ -842,7 +842,7 @@
         document.getElementById("edit_language_name").value = languageName;
         document.getElementById(
           "editLanguageForm"
-        ).action = `admin/update_language/${id}`;
+        ).action = `/admin/update_language/${id}`;
         document.getElementById("editLanguageModal").style.display = "block";
       }
 

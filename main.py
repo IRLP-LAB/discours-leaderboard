@@ -27,13 +27,13 @@ templates = Jinja2Templates(directory="templates")
 active_sessions = {}
 SECRET_KEY = secrets.token_urlsafe(32)
 
-# Database config
+# Database config - Use environment variables for Docker
 DB_CONFIG = {
-    'host': 'localhost',
-    'database': 'coref_eval_system',
-    'user': 'irlab',
-    'password': 'irlab'
-}
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'database': os.getenv('DB_NAME', 'coref_eval_system'),
+    'user': os.getenv('DB_USER', 'harsh'),
+    'password': os.getenv('DB_PASSWORD', 'harsh')
+} 
 
 # Demo data - expanded to include evaluation history
 DEMO_USERS = {
@@ -43,6 +43,7 @@ DEMO_USERS = {
 
 DEMO_LANGUAGES = [
     {'id': 1, 'language_code': 'hi', 'language_name': 'Hindi'},
+    {'id': 2, 'language_code': 'en', 'language_name': 'English'}
 ]
 
 # Demo storage for evaluations and gold datasets
@@ -751,7 +752,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     active_sessions[session_token] = user
     
     # Redirect based on user type
-    redirect_url = "admin" if user['username'] == 'admin' else "client"
+    redirect_url = "/admin" if user['username'] == 'admin' else "/client"
     response = RedirectResponse(url=redirect_url, status_code=302)
     response.set_cookie(key="session_token", value=session_token, httponly=True, max_age=3600)
     
@@ -767,7 +768,7 @@ async def logout():
 @app.get("/client", response_class=HTMLResponse)
 async def client_dashboard(request: Request, user: dict = Depends(get_current_user)):
     if user['username'] == 'admin':
-        return RedirectResponse(url="admin", status_code=302)
+        return RedirectResponse(url="/admin", status_code=302)
     
     # Get languages from database
     conn = get_db_connection()
@@ -898,7 +899,7 @@ async def add_language(
         # Add to demo storage
         add_to_demo_languages(language_code, language_name)
     
-    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 @app.post("/admin/update_language/{language_id}")
 async def update_language(
@@ -953,7 +954,7 @@ async def update_language(
         # Update demo storage
         update_demo_language(language_id, language_code, language_name)
     
-    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 @app.post("/admin/delete_language/{language_id}")
 async def delete_language(
@@ -987,7 +988,7 @@ async def delete_language(
         # Delete from demo storage
         delete_from_demo_languages(language_id)
     
-    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 # Helper functions for demo language management
 def add_to_demo_languages(language_code: str, language_name: str):
@@ -1131,8 +1132,8 @@ async def add_user(
             'is_active': True
         }
         print(f"SUCCESS: User {username} added to demo storage")
-
-    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
+    
+    return RedirectResponse(url="/admin", status_code=302)
 
 @app.post("/admin/upload_gold_dataset")
 async def upload_gold_dataset(
@@ -1183,7 +1184,7 @@ async def upload_gold_dataset(
             # Save to demo data
             add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'])
         
-        return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
+        return RedirectResponse(url="/admin", status_code=302)
         
     except Exception as e:
         print(f"ERROR uploading gold dataset: {e}")
@@ -1232,7 +1233,7 @@ async def delete_gold_dataset(
         # Delete from demo storage
         delete_from_demo_datasets(dataset_id)
     
-    return RedirectResponse(url="/discours-leaderboard/admin", status_code=302)
+    return RedirectResponse(url="/admin", status_code=302)
 
 def delete_from_demo_datasets(dataset_id: int):
     """Delete gold dataset from demo storage"""
@@ -1272,7 +1273,7 @@ def add_to_demo_datasets(language_id: int, filename: str, file_path: str, upload
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting Discourse Evaluation System...")
+    print("Starting Coreference Evaluation System...")
     print("Demo credentials:")
     print("  Admin: admin/admin123")
     print("  User: testuser/user123")
