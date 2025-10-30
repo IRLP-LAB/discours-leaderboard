@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import platform
 
+
 app = FastAPI(root_path="/discours-leaderboard")
 
 # Create directories
