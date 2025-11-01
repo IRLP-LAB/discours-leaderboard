@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: discourse_db
+      MYSQL_USER: discourse_user
+      MYSQL_PASSWORD: discourse_pass
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - discourse_net
+
+  web:
+    build: .
+    container_name: discourse_app
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: mysql+mysqlconnector://discourse_user:discourse_pass@db/discourse_db
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/uploads
+      - ./gold_datasets:/gold_datasets
+      - ./templates:/app/templates
+      - ./scorer:/app/scorer
+
+    networks:
+      - discourse_net
+
+networks:
+  discourse_net:
+
+volumes:
+  db_data:
