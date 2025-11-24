@@ -138,6 +138,12 @@
         gap: 30px;
       }
 
+      .user-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
       .form-section {
         background: #f8f9fa;
         padding: 25px;
@@ -154,6 +160,21 @@
 
       .form-group {
         margin-bottom: 20px;
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px 20px;
+        align-items: end;
+        margin-bottom: 12px;
+      }
+
+      .form-row-actions {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
       }
 
       label {
@@ -361,33 +382,37 @@
 
       <!-- Users Tab -->
       <div id="users" class="tab-content active">
-        <div class="form-grid">
+        <div class="user-grid">
           <div class="form-section">
             <h3>Add New User</h3>
             <form method="post" action="{{ url_for('add_user') }}" id="addUserForm">
-              <div class="form-group">
-                <label for="username">Username:</label>
-                <input type="text" id="username" name="username" required />
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="username">Username:</label>
+                  <input type="text" id="username" name="username" required />
+                </div>
+                <div class="form-group">
+                  <label for="email">Email:</label>
+                  <input type="email" id="email" name="email" required />
+                </div>
               </div>
-              <div class="form-group">
-                <label for="email">Email:</label>
-                <input type="email" id="email" name="email" required />
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="team_name">Team Name:</label>
+                  <input type="text" id="team_name" name="team_name" placeholder="e.g., Team Alpha" />
+                </div>
+                <div class="form-group">
+                  <label for="password">Password:</label>
+                  <input type="password" id="password" name="password" required />
+                </div>
               </div>
-              <div class="form-group">
-                <label for="team_name">Team Name:</label>
-                <input type="text" id="team_name" name="team_name" placeholder="e.g., Team Alpha" />
-              </div>
-              <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" required />
-              </div>
-              <div class="form-group">
-                <label>
+              <div class="form-row-actions">
+                <label style="display: flex; align-items: center; gap: 8px; margin: 0">
                   <input type="checkbox" id="is_admin" name="is_admin" />
                   Admin Privileges
                 </label>
+                <button type="submit" class="btn">Add User</button>
               </div>
-              <button type="submit" class="btn">Add User</button>
             </form>
           </div>
 
@@ -399,6 +424,7 @@
                 <thead>
                   <tr>
                     <th>Username</th>
+                    <th>Team Name</th>
                     <th>Email</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -408,6 +434,7 @@
                   {% for user in users %}
                   <tr>
                     <td>{{ user.username }}</td>
+                    <td>{{ user.team_name or 'N/A' }}</td>
                     <td>{{ user.email }}</td>
                     <td
                       class="{{ 'status-active' if user.is_active else 'status-inactive' }}"
@@ -668,24 +695,26 @@
           {% if recent_activities %}
           <div class="table-container">
             <table>
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Activity</th>
-                  <th>Language</th>
-                  <th>File</th>
-                  <th>Date/Time</th>
-                </tr>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Team</th>
+                    <th>Activity</th>
+                    <th>Language</th>
+                    <th>File</th>
+                    <th>Date/Time</th>
+                  </tr>
               </thead>
-              <tbody>
-                {% for activity in recent_activities %}
-                <tr>
-                  <td>{{ activity.username }}</td>
-                  <td>{{ activity.activity_type|title }}</td>
-                  <td>{{ activity.language_used or 'N/A' }}</td>
-                  <td>{{ activity.file_uploaded or 'N/A' }}</td>
-                  <td>{{ activity.formatted_date }}</td>
-                </tr>
+                <tbody>
+                  {% for activity in recent_activities %}
+                  <tr>
+                    <td>{{ activity.username }}</td>
+                    <td>{{ activity.team_name or 'N/A' }}</td>
+                    <td>{{ activity.activity_type|title }}</td>
+                    <td>{{ activity.language_used or 'N/A' }}</td>
+                    <td>{{ activity.file_uploaded or 'N/A' }}</td>
+                    <td>{{ activity.formatted_date }}</td>
+                  </tr>
                 {% endfor %}
               </tbody>
             </table>

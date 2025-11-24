@@ -71,6 +71,7 @@ DEMO_LANGUAGES = [
 # Demo storage for evaluations and gold datasets
 DEMO_GOLD_DATASETS = []
 DEMO_EVALUATIONS = []
+DEMO_ACTIVITY_LOGS = []
 
 def get_db_connection():
     try:
@@ -122,8 +123,37 @@ def log_activity(user_id: int, activity_type: str, language_id: int = None, file
             print(f"ERROR logging activity: {e}")
             if conn:
                 conn.close()
+            # Fall back to demo log on error
+            add_demo_activity(user_id, activity_type, language_id, filename, details)
     else:
         print(f"DATABASE UNAVAILABLE: Could not log activity - User {user_id} - {activity_type}")
+        add_demo_activity(user_id, activity_type, language_id, filename, details)
+
+def add_demo_activity(user_id: int, activity_type: str, language_id: int = None, filename: str = None, details: str = None):
+    """Store activity in demo log when DB is unavailable"""
+    global DEMO_ACTIVITY_LOGS
+    user_record = next((u for u in DEMO_USERS.values() if u['id'] == user_id), None)
+    username = user_record['username'] if user_record else f"user_{user_id}"
+    team_name = user_record.get('team_name') if user_record else None
+    is_admin = user_record.get('is_admin') if user_record else False
+    language_used = None
+    if language_id:
+        language_used = next((lang['language_name'] for lang in DEMO_LANGUAGES if lang['id'] == language_id), None)
+    
+    DEMO_ACTIVITY_LOGS.append({
+        'id': len(DEMO_ACTIVITY_LOGS) + 1,
+        'user_id': user_id,
+        'username': username,
+        'team_name': team_name,
+        'is_admin': is_admin,
+        'activity_type': activity_type,
+        'language_id': language_id,
+        'language_used': language_used,
+        'filename': filename,
+        'file_uploaded': filename,
+        'details': details,
+        'created_at': datetime.now()
+    })
 
 def authenticate_user(username: str, password: str):
     conn = get_db_connection()
@@ -507,12 +537,14 @@ def save_evaluation_results(user_id: int, language_id: int, filename: str, file_
 def save_to_demo_evaluations(user_id: int, language_id: int, filename: str, file_path: str, scores: dict):
     """Save evaluation to demo storage"""
     language_name = next((lang['language_name'] for lang in DEMO_LANGUAGES if lang['id'] == language_id), 'Unknown')
+    user_team = next((user['team_name'] for user in DEMO_USERS.values() if user['id'] == user_id), None)
     
     evaluation = {
         'id': len(DEMO_EVALUATIONS) + 1,
         'user_id': user_id,
         'language_id': language_id,
         'language_name': language_name,
+        'team_name': user_team,
         'uploaded_filename': filename,
         'file_path': file_path,
         'formatted_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -534,11 +566,11 @@ def get_user_evaluation_history(user_id: int):
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            # Fixed SQL query - removed DATE_FORMAT which might cause parameter issues
             cursor.execute("""
-                SELECT ue.*, l.language_name, ue.created_at as formatted_date
+                SELECT ue.*, l.language_name, u.team_name, ue.created_at as formatted_date
                 FROM user_evaluations ue
                 JOIN languages l ON ue.language_id = l.id
+                JOIN users u ON ue.user_id = u.id
                 WHERE ue.user_id = %s
                 ORDER BY ue.created_at DESC
                 LIMIT 20
@@ -560,9 +592,18 @@ def get_user_evaluation_history(user_id: int):
     
     # Fallback to demo data
     history = [eval for eval in DEMO_EVALUATIONS if eval['user_id'] == user_id]
-    history.sort(key=lambda x: x['created_at'], reverse=True)
-    print(f"SUCCESS: Retrieved {len(history)} evaluation records from demo storage")
-    return history[:20]
+    enriched_history = []
+    for eval_record in history:
+        record = eval_record.copy()
+        if not record.get('team_name'):
+            user_data = next((u for u in DEMO_USERS.values() if u['id'] == user_id), {})
+            record['team_name'] = user_data.get('team_name')
+        enriched_history.append(record)
+    
+    enriched_history.sort(key=lambda x: x['created_at'], reverse=True)
+    print(f"SUCCESS: Retrieved {len(enriched_history)} evaluation records from demo storage")
+    return enriched_history[:20]
+
 def get_homepage_statistics():
     """Get statistics for the homepage hero section"""
     stats = {
@@ -798,6 +839,7 @@ def get_best_user_score_per_language():
             return []
     else:
         return []
+    
 @app.get("/", response_class=HTMLResponse)
 async def homepage(request: Request):
     """Homepage with dynamic leaderboards and statistics"""
@@ -1258,6 +1300,36 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
     if not is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    # Demo fallbacks for offline/empty database use
+    demo_users = [
+        {
+            'id': info['id'],
+            'username': info['username'],
+            'email': info['email'],
+            'is_active': info.get('is_active', True),
+            'team_name': info.get('team_name'),
+            'is_admin': info.get('is_admin', False),
+            'created_at': 'Demo'
+        }
+        for info in DEMO_USERS.values()
+        if info.get('is_active', True) and not info.get('is_admin') and info.get('username') != 'admin'
+    ]
+    demo_languages = [lang for lang in DEMO_LANGUAGES if not lang.get('is_deleted')]
+    demo_gold_datasets = [ds for ds in DEMO_GOLD_DATASETS if not ds.get('is_deleted')]
+    demo_recent_activities = []
+    for activity in DEMO_ACTIVITY_LOGS:
+        if activity.get('is_admin') or activity.get('username') == 'admin':
+            continue
+        display_name = activity.get('username', 'Unknown')
+        team_name = activity.get('team_name')
+        if team_name:
+            display_name = f"{display_name} ({team_name})"
+        if activity.get('created_at') and hasattr(activity['created_at'], 'strftime'):
+            formatted_date = activity['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            formatted_date = str(activity.get('created_at', 'N/A'))
+        demo_recent_activities.append({**activity, 'formatted_date': formatted_date, 'display_name': display_name})
+    
     # Get languages from database
     conn = get_db_connection()
     users = []
@@ -1273,7 +1345,7 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
             cursor.execute("""
                 SELECT id, username, email, is_active, team_name, is_admin, created_at
                 FROM users 
-                WHERE is_active = 1
+                WHERE is_active = 1 AND (is_admin = 0 OR is_admin IS NULL) AND username != 'admin'
                 ORDER BY created_at DESC
             """)
             users = cursor.fetchall()
@@ -1294,9 +1366,10 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
             
             # Get recent activity logs (last 20)
             cursor.execute("""
-                SELECT al.*, u.username
+                SELECT al.*, u.username, u.team_name, u.is_admin
                 FROM activity_logs al
                 JOIN users u ON al.user_id = u.id
+                WHERE (u.is_admin = 0 OR u.is_admin IS NULL) AND u.username != 'admin'
                 ORDER BY al.created_at DESC
                 LIMIT 20
             """)
@@ -1308,17 +1381,28 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
                     activity['formatted_date'] = activity['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                 else:
                     activity['formatted_date'] = str(activity.get('created_at', 'N/A'))
+                display_name = activity.get('username', 'Unknown')
+                if activity.get('team_name'):
+                    display_name = f"{display_name} ({activity['team_name']})"
+                activity['display_name'] = display_name
+            
+            if not recent_activities:
+                recent_activities = demo_recent_activities
             
             conn.close()
         except Exception as e:
             print(f"Database error getting admin data: {e}")
-            languages = DEMO_LANGUAGES
-            gold_datasets = DEMO_GOLD_DATASETS
+            users = demo_users
+            languages = demo_languages
+            gold_datasets = demo_gold_datasets
+            recent_activities = demo_recent_activities
             if conn:
                 conn.close()
     else:
-        languages = DEMO_LANGUAGES
-        gold_datasets = DEMO_GOLD_DATASETS
+        users = demo_users
+        languages = demo_languages
+        gold_datasets = demo_gold_datasets
+        recent_activities = demo_recent_activities
     
     return templates.TemplateResponse("admin_dashboard.html", {
         "request": request,
