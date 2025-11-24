@@ -630,7 +630,6 @@
               <thead>
                 <tr>
                   <th>Rank</th>
-                  <th>Username</th>
                   <th>Team</th>
                   <th>MUC F1</th>
                   <th>B³ F1</th>
@@ -736,7 +735,6 @@
                   }
 
                   row.innerHTML = '<td class="' + rankClass + '">' + rankText + '</td>' +
-                      '<td><strong>' + score.username + '</strong></td>' +
                       '<td><em>' + (score.team_name || 'N/A') + '</em></td>' +
                       '<td class="score">' + (score.muc_f1 ? score.muc_f1.toFixed(4) : 'N/A') + '</td>' +
                       '<td class="score">' + (score.bcub_f1 ? score.bcub_f1.toFixed(4) : 'N/A') + '</td>' +
