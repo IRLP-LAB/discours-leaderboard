@@ -8,10 +8,11 @@ import secrets
 import subprocess
 import tempfile
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import re
 import platform
+import time
 
 
 app = FastAPI(root_path="/discours-leaderboard")
@@ -24,9 +25,29 @@ Path("scorer").mkdir(exist_ok=True)
 
 templates = Jinja2Templates(directory="templates")
 
+# Middleware to add cache control headers to authenticated routes
+@app.middleware("http")
+async def cache_control_middleware(request: Request, call_next):
+    # List of paths that require authentication and should not be cached
+    protected_paths = ["/client", "/admin", "/evaluate", "/logout"]
+    
+    response = await call_next(request)
+    
+    # Check if the request path requires authentication
+    if any(request.url.path.startswith(path) for path in protected_paths):
+        # Add cache control headers for protected pages
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0, private"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    
+    return response
+
 # Session storage (in production, use Redis or database)
 active_sessions = {}
 SECRET_KEY = secrets.token_urlsafe(32)
+SESSION_TIMEOUT = 3600  # 1 hour in seconds
 
 # Database config - Use environment variables for Docker
 DB_CONFIG = {
@@ -38,8 +59,8 @@ DB_CONFIG = {
 
 # Demo data - expanded to include evaluation history
 DEMO_USERS = {
-    'admin': {'id': 1, 'username': 'admin', 'password_hash': bcrypt.hashpw('admin123'.encode(), bcrypt.gensalt()).decode(), 'email': 'admin@test.com', 'is_active': True},
-    'testuser': {'id': 2, 'username': 'testuser', 'password_hash': bcrypt.hashpw('user123'.encode(), bcrypt.gensalt()).decode(), 'email': 'user@test.com', 'is_active': True}
+    'admin': {'id': 1, 'username': 'admin', 'password_hash': bcrypt.hashpw('admin123'.encode(), bcrypt.gensalt()).decode(), 'email': 'admin@test.com', 'is_active': True, 'team_name': None, 'is_admin': True},
+    'testuser': {'id': 2, 'username': 'testuser', 'password_hash': bcrypt.hashpw('user123'.encode(), bcrypt.gensalt()).decode(), 'email': 'user@test.com', 'is_active': True, 'team_name': 'Test Team', 'is_admin': False}
 }
 
 DEMO_LANGUAGES = [
@@ -58,12 +79,51 @@ def get_db_connection():
         print(f"Database connection failed: {e}")
         return None
 
-def get_current_user(session_token: str = Cookie(None)):
-    if not session_token or session_token not in active_sessions:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+def get_session_user(session_token: str | None):
+    """Return session user if token is valid, otherwise None."""
+    if not session_token:
+        return None
     
-    user_info = active_sessions[session_token]
-    return user_info
+    session_data = active_sessions.get(session_token)
+    if not session_data:
+        return None
+    
+    expires_at = session_data.get('expires_at')
+    if expires_at and time.time() > expires_at:
+        # Session expired - remove and deny
+        del active_sessions[session_token]
+        return None
+    
+    # Refresh sliding expiration on activity
+    session_data['expires_at'] = time.time() + SESSION_TIMEOUT
+    return session_data.get('user')
+
+def get_current_user(session_token: str = Cookie(None)):
+    user = get_session_user(session_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+def log_activity(user_id: int, activity_type: str, language_id: int = None, filename: str = None, details: str = None):
+    """Log user activities to database for audit trail"""
+    conn = get_db_connection()
+    
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO activity_logs (user_id, activity_type, language_id, filename, details)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, activity_type, language_id, filename, details))
+            conn.commit()
+            conn.close()
+            print(f"ACTIVITY LOGGED: User {user_id} - {activity_type}")
+        except Exception as e:
+            print(f"ERROR logging activity: {e}")
+            if conn:
+                conn.close()
+    else:
+        print(f"DATABASE UNAVAILABLE: Could not log activity - User {user_id} - {activity_type}")
 
 def authenticate_user(username: str, password: str):
     conn = get_db_connection()
@@ -74,6 +134,7 @@ def authenticate_user(username: str, password: str):
             cursor.execute("SELECT * FROM users WHERE username = %s AND is_active = 1", (username,))
             user = cursor.fetchone()
             conn.close()
+            print(f"DEBUG: Found user in database: {username}")
         except Exception as e:
             print(f"Database authentication error: {e}")
             user = None
@@ -81,13 +142,32 @@ def authenticate_user(username: str, password: str):
                 conn.close()
     else:
         user = DEMO_USERS.get(username)
+        print(f"DEBUG: Database unavailable, using demo users for: {username}")
     
     if not user:
+        print(f"DEBUG: User not found: {username}")
         return None
     
-    if not bcrypt.checkpw(password.encode(), user['password_hash'].encode()):
+    # Handle both bytes and string password hashes
+    password_hash = user['password_hash']
+    print(f"DEBUG: Password hash type: {type(password_hash)}")
+    print(f"DEBUG: Password hash (first 20 chars): {str(password_hash)[:20]}")
+    
+    if isinstance(password_hash, str):
+        password_hash = password_hash.encode()
+    
+    # Test password check
+    try:
+        result = bcrypt.checkpw(password.encode(), password_hash)
+        print(f"DEBUG: Password check result: {result}")
+        if not result:
+            print(f"DEBUG: Password mismatch for user: {username}")
+            return None
+    except Exception as e:
+        print(f"DEBUG: bcrypt error: {e}")
         return None
     
+    print(f"DEBUG: Authentication successful for: {username}")
     return user
 
 def find_gold_dataset(language_id: int):
@@ -544,8 +624,8 @@ def get_language_leaderboards():
         try:
             cursor = conn.cursor(dictionary=True)
             
-            # Get all languages
-            cursor.execute("SELECT * FROM languages ORDER BY language_name")
+            # Get all non-deleted languages
+            cursor.execute("SELECT * FROM languages WHERE is_deleted = FALSE ORDER BY language_name")
             languages = cursor.fetchall()
             
             for language in languages:
@@ -556,17 +636,24 @@ def get_language_leaderboards():
                     'top_scores': []
                 }
                 
-                # Get ALL scores for this language (not just top 3)
+                # Get ALL scores for this language, using only non-deleted datasets
+                # Get the latest version of the dataset for this language
                 cursor.execute("""
-                    SELECT ue.*, u.username,
+                    SELECT ue.*, u.username, u.team_name,
                            ((COALESCE(ue.muc_f1, 0) + COALESCE(ue.bcub_f1, 0) + 
                              COALESCE(ue.ceafm_f1, 0) + COALESCE(ue.blanc_f1, 0)) / 4) as avg_f1
                     FROM user_evaluations ue
                     JOIN users u ON ue.user_id = u.id
+                    JOIN gold_datasets gd ON ue.language_id = gd.language_id
                     WHERE ue.language_id = %s
                     AND u.is_active = 1
+                    AND gd.is_deleted = 0
+                    AND gd.version = (
+                        SELECT MAX(version) FROM gold_datasets 
+                        WHERE language_id = %s AND is_deleted = 0
+                    )
                     ORDER BY avg_f1 DESC
-                """, (language['id'],))
+                """, (language['id'], language['id']))
                 
                 top_scores = cursor.fetchall()
                 
@@ -618,6 +705,10 @@ def get_demo_leaderboards():
     leaderboards = []
     
     for language in DEMO_LANGUAGES:
+        # Skip deleted languages
+        if language.get('is_deleted', False):
+            continue
+            
         language_data = {
             'language_id': language['id'],
             'language_name': language['language_name'],
@@ -634,6 +725,11 @@ def get_demo_leaderboards():
                 if 'created_at' in eval_copy and eval_copy['created_at'] is not None:
                     if hasattr(eval_copy['created_at'], 'strftime'):
                         eval_copy['created_at'] = eval_copy['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                
+                # Get team_name from DEMO_USERS
+                user_data = next((u for u in DEMO_USERS.values() if u['id'] == eval['user_id']), {})
+                eval_copy['team_name'] = user_data.get('team_name')
+                
                 language_evaluations.append(eval_copy)
         
         # Sort by average F1 score (calculate from available metrics)
@@ -657,7 +753,7 @@ def get_demo_leaderboards():
         
         leaderboards.append(language_data)
     
-    print(f"SUCCESS: Retrieved demo leaderboards for {len(DEMO_LANGUAGES)} languages")
+    print(f"SUCCESS: Retrieved demo leaderboards for {len(leaderboards)} non-deleted languages")
     return leaderboards
 
 def get_best_user_score_per_language():
@@ -706,6 +802,13 @@ def get_best_user_score_per_language():
 async def homepage(request: Request):
     """Homepage with dynamic leaderboards and statistics"""
     try:
+        # Check if a session exists to personalize the page
+        session_user = get_session_user(request.cookies.get("session_token"))
+        dashboard_url = None
+        if session_user:
+            is_admin = session_user.get('is_admin', False) or session_user.get('username') == 'admin'
+            dashboard_url = request.url_for("admin_dashboard") if is_admin else request.url_for("client_dashboard")
+        
         # Get homepage statistics
         stats = get_homepage_statistics()
         
@@ -715,7 +818,9 @@ async def homepage(request: Request):
         return templates.TemplateResponse("homepage.html", {
             "request": request,
             "stats": stats,
-            "leaderboards": leaderboards
+            "leaderboards": leaderboards,
+            "user": session_user,
+            "dashboard_url": dashboard_url
         })
         
     except Exception as e:
@@ -728,19 +833,40 @@ async def homepage(request: Request):
                 'total_participants': len(DEMO_USERS),
                 'total_evaluations': len(DEMO_EVALUATIONS)
             },
-            "leaderboards": get_demo_leaderboards()
+            "leaderboards": get_demo_leaderboards(),
+            "user": None,
+            "dashboard_url": None
         })
     
 @app.get("/home", response_class=HTMLResponse) 
 async def home_redirect(request: Request):
     """Redirect /home to login for backward compatibility"""
     return RedirectResponse(url=request.url_for("homepage"), status_code=302)
+
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    """Display the login page"""
+async def login_page(request: Request, session_token: str = Cookie(None)):
+    """Display the login page, or redirect if already authenticated"""
+    session_user = get_session_user(session_token)
+    if session_user:
+        is_admin = session_user.get('is_admin', False) or session_user.get('username') == 'admin'
+        redirect_url = request.url_for("admin_dashboard") if is_admin else request.url_for("client_dashboard")
+        response = RedirectResponse(url=redirect_url, status_code=302)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+    
     return templates.TemplateResponse("login.html", {"request": request})
+
 @app.post("/login", name="login")
-async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+async def login(request: Request, username: str = Form(default=""), password: str = Form(default="")):
+    # Check for missing credentials
+    if not username or not password:
+        return templates.TemplateResponse("login.html", {
+            "request": request, 
+            "error": "Both username and password are required"
+        })
+    
     user = authenticate_user(username, password)
     
     if not user:
@@ -751,20 +877,55 @@ async def login(request: Request, username: str = Form(...), password: str = For
     
     # Create session
     session_token = secrets.token_urlsafe(32)
-    active_sessions[session_token] = user
+    active_sessions[session_token] = {
+        'user': user,
+        'created_at': time.time(),
+        'expires_at': time.time() + SESSION_TIMEOUT
+    }
     
-    # Redirect based on user type
-    redirect_url = request.url_for("admin_dashboard") if user["username"] == "admin" else request.url_for("client_dashboard")
+    # Log login activity
+    log_activity(user['id'], 'login')
+    
+    # Redirect based on user is_admin flag (supports multiple admins)
+    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+    redirect_url = request.url_for("admin_dashboard") if is_admin else request.url_for("client_dashboard")
     response = RedirectResponse(url=redirect_url, status_code=302)
-    response.set_cookie(key="session_token", value=session_token, httponly=True, max_age=3600)
     
-    print(f"SUCCESS: User {username} logged in successfully")
+    # Set session cookie with httponly flag for security
+    response.set_cookie(
+        key="session_token", 
+        value=session_token, 
+        httponly=True,  # Prevent JavaScript access
+        secure=False,  # Set to True in production with HTTPS
+        samesite="strict",  # CSRF protection
+        max_age=SESSION_TIMEOUT
+    )
+    
+    # Add cache control headers to prevent caching of protected pages
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
+    print(f"SUCCESS: User {username} logged in successfully (Admin: {is_admin})")
     return response
 
 @app.get("/logout", name="logout")
-async def logout(request: Request):
-    response = RedirectResponse(url=request.url_for("homepage"),status_code=302)
-    response.delete_cookie(key="session_token")
+async def logout(request: Request, session_token: str = Cookie(None)):
+    # Clear the session from server-side storage
+    if session_token and session_token in active_sessions:
+        del active_sessions[session_token]
+        print(f"SUCCESS: Session cleared for token: {session_token[:20]}...")
+    
+    response = RedirectResponse(url=request.url_for("homepage"), status_code=302)
+    
+    # Delete the cookie
+    response.delete_cookie(key="session_token", path="/")
+    
+    # Add cache control headers to prevent caching after logout
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
     return response
 
 @app.get("/client", response_class=HTMLResponse)
@@ -843,6 +1004,9 @@ async def evaluate_file(
         # Save results to database/demo storage
         save_evaluation_results(user['id'], language_id, file.filename, str(upload_path), scores)
         
+        # Log activity
+        log_activity(user['id'], 'file_uploaded', language_id, file.filename)
+        
         print(f"EVALUATION COMPLETE: {file.filename}")
         return {"success": True, "scores": scores, "message": "Evaluation completed successfully"}
     
@@ -851,6 +1015,7 @@ async def evaluate_file(
     except Exception as e:
         print(f"ERROR during evaluation: {e}")
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
 @app.post("/admin/add_language",name="add_language")
 async def add_language(
     request: Request,
@@ -858,7 +1023,9 @@ async def add_language(
     language_name: str = Form(...),
     user: dict = Depends(get_current_user)
 ):
-    if user['username'] != 'admin':
+    # Check if user is admin
+    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+    if not is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Validate language code (basic validation)
@@ -891,6 +1058,9 @@ async def add_language(
             conn.commit()
             conn.close()
             print(f"SUCCESS: Language {language_name} ({language_code}) added to database")
+            
+            # Log activity
+            log_activity(user['id'], 'language_added')
         except HTTPException:
             raise
         except Exception as e:
@@ -967,23 +1137,46 @@ async def delete_language(
     language_id: int,
     user: dict = Depends(get_current_user)
 ):
-    if user['username'] != 'admin':
+    # Check if user is admin
+    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+    if not is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db_connection()
     if conn:
         try:
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
             
-            # First delete associated gold datasets
-            cursor.execute("DELETE FROM gold_datasets WHERE language_id = %s", (language_id,))
+            # Get language name for confirmation message
+            cursor.execute("SELECT language_name FROM languages WHERE id = %s", (language_id,))
+            language = cursor.fetchone()
             
-            # Then delete the language
-            cursor.execute("DELETE FROM languages WHERE id = %s", (language_id,))
+            if not language:
+                conn.close()
+                raise HTTPException(status_code=404, detail="Language not found")
+            
+            language_name = language['language_name']
+            
+            # Soft delete: Mark language as deleted
+            cursor.execute(
+                "UPDATE languages SET is_deleted = TRUE WHERE id = %s",
+                (language_id,)
+            )
+            
+            # Soft delete: Mark associated gold datasets as deleted
+            cursor.execute(
+                "UPDATE gold_datasets SET is_deleted = TRUE WHERE language_id = %s",
+                (language_id,)
+            )
             
             conn.commit()
             conn.close()
-            print(f"SUCCESS: Language and associated datasets deleted from database")
+            print(f"SUCCESS: Language '{language_name}' marked as deleted from database (ID: {language_id})")
+            
+            # Log activity
+            log_activity(user['id'], 'language_deleted')
+        except HTTPException:
+            raise
         except Exception as e:
             print(f"ERROR deleting language from database: {e}")
             if conn:
@@ -1036,41 +1229,86 @@ def update_demo_language(language_id: int, language_code: str, language_name: st
     raise HTTPException(status_code=404, detail="Language not found")
 
 def delete_from_demo_languages(language_id: int):
-    """Delete language from demo storage"""
+    """Soft delete language from demo storage"""
     global DEMO_LANGUAGES, DEMO_GOLD_DATASETS
     
-    # Remove associated gold datasets
-    DEMO_GOLD_DATASETS[:] = [dataset for dataset in DEMO_GOLD_DATASETS if dataset['language_id'] != language_id]
-    
-    # Remove the language
-    original_count = len(DEMO_LANGUAGES)
-    DEMO_LANGUAGES[:] = [lang for lang in DEMO_LANGUAGES if lang['id'] != language_id]
-    
-    if len(DEMO_LANGUAGES) < original_count:
-        print(f"SUCCESS: Language and associated datasets deleted from demo storage")
-    else:
+    # Find the language
+    language = next((lang for lang in DEMO_LANGUAGES if lang['id'] == language_id), None)
+    if not language:
         raise HTTPException(status_code=404, detail="Language not found")
+    
+    # Soft delete: Mark language as deleted
+    for lang in DEMO_LANGUAGES:
+        if lang['id'] == language_id:
+            lang['is_deleted'] = True
+            break
+    
+    # Soft delete: Mark associated datasets as deleted
+    for dataset in DEMO_GOLD_DATASETS:
+        if dataset['language_id'] == language_id:
+            dataset['is_deleted'] = True
+    
+    print(f"SUCCESS: Language marked as deleted from demo storage")
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, user: dict = Depends(get_current_user)):
-    if user['username'] != 'admin':
+    # Check if user is admin using is_admin flag or username
+    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+    
+    if not is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Get languages from database
     conn = get_db_connection()
+    users = []
+    languages = []
+    gold_datasets = []
+    recent_activities = []
+    
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM languages ORDER BY language_name")
+            
+            # Get all active users
+            cursor.execute("""
+                SELECT id, username, email, is_active, team_name, is_admin, created_at
+                FROM users 
+                WHERE is_active = 1
+                ORDER BY created_at DESC
+            """)
+            users = cursor.fetchall()
+            
+            # Exclude deleted languages
+            cursor.execute("SELECT * FROM languages WHERE is_deleted = FALSE ORDER BY language_name")
             languages = cursor.fetchall()
             
-            # Get gold datasets
+            # Get gold datasets (only non-deleted)
             cursor.execute("""
                 SELECT gd.*, l.language_name 
                 FROM gold_datasets gd 
                 JOIN languages l ON gd.language_id = l.id 
+                WHERE gd.is_deleted = FALSE AND l.is_deleted = FALSE
                 ORDER BY gd.created_at DESC
             """)
             gold_datasets = cursor.fetchall()
+            
+            # Get recent activity logs (last 20)
+            cursor.execute("""
+                SELECT al.*, u.username
+                FROM activity_logs al
+                JOIN users u ON al.user_id = u.id
+                ORDER BY al.created_at DESC
+                LIMIT 20
+            """)
+            recent_activities = cursor.fetchall()
+            
+            # Format timestamps for display
+            for activity in recent_activities:
+                if activity.get('created_at') and hasattr(activity['created_at'], 'strftime'):
+                    activity['formatted_date'] = activity['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    activity['formatted_date'] = str(activity.get('created_at', 'N/A'))
+            
             conn.close()
         except Exception as e:
             print(f"Database error getting admin data: {e}")
@@ -1084,10 +1322,10 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
     
     return templates.TemplateResponse("admin_dashboard.html", {
         "request": request,
-        "users": [],  # You can implement user management if needed
+        "users": users,
         "languages": languages,
         "gold_datasets": gold_datasets,
-        "recent_activities": [],  # You can implement activity logging if needed
+        "recent_activities": recent_activities,
         "scorer_exists": False  # Removed scorer functionality
     })
 
@@ -1097,12 +1335,18 @@ async def add_user(
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    team_name: str = Form(None),
+    is_admin: bool = Form(False),
     user: dict = Depends(get_current_user)
 ):
-    if user['username'] != 'admin':
+    if not (user.get('is_admin', False) or user.get('username') == 'admin'):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    
+    # Don't allow team_name for admin users
+    if is_admin:
+        team_name = None
     
     # Add to database or demo users
     conn = get_db_connection()
@@ -1110,12 +1354,12 @@ async def add_user(
         try:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO users (username, email, password_hash, is_active) VALUES (%s, %s, %s, %s)",
-                (username, email, password_hash, True)
+                "INSERT INTO users (username, email, password_hash, is_active, team_name, is_admin) VALUES (%s, %s, %s, %s, %s, %s)",
+                (username, email, password_hash, True, team_name, is_admin)
             )
             conn.commit()
             conn.close()
-            print(f"SUCCESS: User {username} added to database")
+            print(f"SUCCESS: User {username} added to database (Admin: {is_admin})")
         except Exception as e:
             print(f"ERROR adding user to database: {e}")
             if conn:
@@ -1126,9 +1370,11 @@ async def add_user(
                 'username': username,
                 'password_hash': password_hash,
                 'email': email,
-                'is_active': True
+                'is_active': True,
+                'team_name': team_name,
+                'is_admin': is_admin
             }
-            print(f"SUCCESS: User {username} added to demo storage")
+            print(f"SUCCESS: User {username} added to demo storage (Admin: {is_admin})")
     else:
         # Add to demo users
         DEMO_USERS[username] = {
@@ -1136,9 +1382,57 @@ async def add_user(
             'username': username,
             'password_hash': password_hash,
             'email': email,
-            'is_active': True
+            'is_active': True,
+            'team_name': team_name,
+            'is_admin': is_admin
         }
-        print(f"SUCCESS: User {username} added to demo storage")
+        print(f"SUCCESS: User {username} added to demo storage (Admin: {is_admin})")
+    
+    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+
+@app.post("/admin/delete_user/{user_id}", name="delete_user")
+async def delete_user(
+    request: Request,
+    user_id: int,
+    user: dict = Depends(get_current_user)
+):
+    # Check if user is admin
+    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Prevent deleting yourself
+    if user['id'] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            
+            # Get user info before soft delete
+            cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+            user_to_delete = cursor.fetchone()
+            
+            if not user_to_delete:
+                conn.close()
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Soft delete: Mark user as inactive
+            cursor.execute(
+                "UPDATE users SET is_active = 0 WHERE id = %s",
+                (user_id,)
+            )
+            
+            conn.commit()
+            conn.close()
+            print(f"SUCCESS: User '{user_to_delete['username']}' marked as inactive (ID: {user_id})")
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"ERROR deleting user from database: {e}")
+            if conn:
+                conn.close()
     
     return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
@@ -1149,7 +1443,9 @@ async def upload_gold_dataset(
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
-    if user['username'] != 'admin':
+    # Check if user is admin
+    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+    if not is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     if not file.filename.endswith('.txt'):
@@ -1160,15 +1456,35 @@ async def upload_gold_dataset(
         lang_dir = Path("gold_datasets") / f"lang_{language_id}"
         lang_dir.mkdir(exist_ok=True)
         
-        # Save file with timestamp
+        # Get the next version number for this language
+        conn = get_db_connection()
+        next_version = 1
+        
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT MAX(version) as max_version FROM gold_datasets WHERE language_id = %s AND is_deleted = FALSE",
+                    (language_id,)
+                )
+                result = cursor.fetchone()
+                if result and result['max_version']:
+                    next_version = int(result['max_version']) + 1
+                conn.close()
+            except Exception as e:
+                print(f"Error getting version: {e}")
+                if conn:
+                    conn.close()
+        
+        # Save file with timestamp and version
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        file_path = lang_dir / f"{timestamp}_{file.filename}"
+        file_path = lang_dir / f"v{next_version}_{timestamp}_{file.filename}"
         
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
         
-        print(f"GOLD DATASET SAVED: {file_path}")
+        print(f"GOLD DATASET SAVED: {file_path} (Version {next_version})")
         
         # Save to database or demo data
         conn = get_db_connection()
@@ -1176,34 +1492,40 @@ async def upload_gold_dataset(
             try:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO gold_datasets (language_id, filename, file_path, uploaded_by) VALUES (%s, %s, %s, %s)",
-                    (language_id, file.filename, str(file_path), user['username'])
+                    "INSERT INTO gold_datasets (language_id, filename, file_path, uploaded_by, is_deleted, version) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (language_id, file.filename, str(file_path), user['username'], False, next_version)
                 )
                 conn.commit()
                 conn.close()
-                print(f"SUCCESS: Gold dataset saved to database: {file.filename}")
+                print(f"SUCCESS: Gold dataset saved to database (Version {next_version}): {file.filename}")
             except Exception as e:
                 print(f"ERROR saving to database: {e}")
                 if conn:
                     conn.close()
                 # Fallback to demo data
-                add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'])
+                add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'], next_version)
         else:
             # Save to demo data
-            add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'])
+            add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'], next_version)
 
+        # Log activity
+        log_activity(user['id'], 'gold_dataset_uploaded', language_id, file.filename)
+        
         return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
     except Exception as e:
         print(f"ERROR uploading gold dataset: {e}")
         raise HTTPException(status_code=500, detail=f"Error uploading gold dataset: {str(e)}")
+
 @app.post("/admin/delete_gold_dataset/{dataset_id}")
 async def delete_gold_dataset(
     request: Request,
     dataset_id: int,
     user: dict = Depends(get_current_user)
 ):
-    if user['username'] != 'admin':
+    # Check if user is admin
+    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+    if not is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     conn = get_db_connection()
@@ -1211,25 +1533,25 @@ async def delete_gold_dataset(
         try:
             cursor = conn.cursor(dictionary=True)
             
-            # Get the dataset file path before deleting
-            cursor.execute("SELECT file_path FROM gold_datasets WHERE id = %s", (dataset_id,))
+            # Get the dataset info before marking as deleted
+            cursor.execute("SELECT filename FROM gold_datasets WHERE id = %s", (dataset_id,))
             dataset = cursor.fetchone()
             
             if not dataset:
                 conn.close()
                 raise HTTPException(status_code=404, detail="Gold dataset not found")
             
-            # Delete the physical file if it exists
-            file_path = Path(dataset['file_path'])
-            if file_path.exists():
-                file_path.unlink()
-                print(f"SUCCESS: Deleted physical file: {file_path}")
+            filename = dataset['filename']
             
-            # Delete from database
-            cursor.execute("DELETE FROM gold_datasets WHERE id = %s", (dataset_id,))
+            # Soft delete: Mark dataset as deleted instead of hard delete
+            cursor.execute(
+                "UPDATE gold_datasets SET is_deleted = TRUE WHERE id = %s",
+                (dataset_id,)
+            )
+            
             conn.commit()
             conn.close()
-            print(f"SUCCESS: Gold dataset deleted from database (ID: {dataset_id})")
+            print(f"SUCCESS: Gold dataset '{filename}' marked as deleted (ID: {dataset_id})")
         except HTTPException:
             raise
         except Exception as e:
@@ -1245,7 +1567,7 @@ async def delete_gold_dataset(
     return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
 
 def delete_from_demo_datasets(dataset_id: int):
-    """Delete gold dataset from demo storage"""
+    """Soft delete gold dataset from demo storage"""
     global DEMO_GOLD_DATASETS
     
     # Find the dataset
@@ -1254,16 +1576,15 @@ def delete_from_demo_datasets(dataset_id: int):
     if not dataset:
         raise HTTPException(status_code=404, detail="Gold dataset not found")
     
-    # Delete the physical file if it exists
-    file_path = Path(dataset['file_path'])
-    if file_path.exists():
-        file_path.unlink()
-        print(f"SUCCESS: Deleted physical file: {file_path}")
+    # Soft delete: Mark dataset as deleted (don't remove from list)
+    for ds in DEMO_GOLD_DATASETS:
+        if ds['id'] == dataset_id:
+            ds['is_deleted'] = True
+            break
     
-    # Remove from demo storage
-    DEMO_GOLD_DATASETS[:] = [ds for ds in DEMO_GOLD_DATASETS if ds['id'] != dataset_id]
-    print(f"SUCCESS: Gold dataset deleted from demo storage (ID: {dataset_id})")
-def add_to_demo_datasets(language_id: int, filename: str, file_path: str, uploaded_by: str):
+    print(f"SUCCESS: Gold dataset marked as deleted from demo storage (ID: {dataset_id})")
+
+def add_to_demo_datasets(language_id: int, filename: str, file_path: str, uploaded_by: str, version: int = 1):
     """Add gold dataset to demo data"""
     language_name = next((lang['language_name'] for lang in DEMO_LANGUAGES if lang['id'] == language_id), 'Unknown')
     
@@ -1274,11 +1595,13 @@ def add_to_demo_datasets(language_id: int, filename: str, file_path: str, upload
         'filename': filename,
         'file_path': file_path,
         'uploaded_by': uploaded_by,
+        'version': version,
+        'is_deleted': False,
         'created_at': datetime.now()
     }
     
     DEMO_GOLD_DATASETS.append(dataset)
-    print(f"SUCCESS: Gold dataset added to demo data: {filename}")
+    print(f"SUCCESS: Gold dataset added to demo data (Version {version}): {filename}")
 
 if __name__ == "__main__":
     import uvicorn

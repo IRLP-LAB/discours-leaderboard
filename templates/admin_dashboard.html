@@ -364,7 +364,7 @@
         <div class="form-grid">
           <div class="form-section">
             <h3>Add New User</h3>
-            <form method="post" action="{{ url_for('add_user') }}">
+            <form method="post" action="{{ url_for('add_user') }}" id="addUserForm">
               <div class="form-group">
                 <label for="username">Username:</label>
                 <input type="text" id="username" name="username" required />
@@ -374,8 +374,18 @@
                 <input type="email" id="email" name="email" required />
               </div>
               <div class="form-group">
+                <label for="team_name">Team Name:</label>
+                <input type="text" id="team_name" name="team_name" placeholder="e.g., Team Alpha" />
+              </div>
+              <div class="form-group">
                 <label for="password">Password:</label>
                 <input type="password" id="password" name="password" required />
+              </div>
+              <div class="form-group">
+                <label>
+                  <input type="checkbox" id="is_admin" name="is_admin" />
+                  Admin Privileges
+                </label>
               </div>
               <button type="submit" class="btn">Add User</button>
             </form>
@@ -528,7 +538,7 @@
                             type="submit"
                             class="btn btn-danger btn-small"
                           >
-                            Delete
+                            Archive
                           </button>
                         </form>
                       </div>
@@ -623,10 +633,10 @@
                         method="post"
                         action="/admin/delete_gold_dataset/{{ dataset.id }}"
                         style="display: inline"
-                        onsubmit="return confirm('Are you sure you want to delete this gold dataset?')"
+                        onsubmit="return confirm('Archive this gold dataset? The data will be kept in the database but hidden from the dashboard. Related evaluations will also be hidden.')"
                       >
                         <button type="submit" class="btn btn-danger btn-small">
-                          Delete
+                          Archive
                         </button>
                       </form>
                     </td>
@@ -810,6 +820,22 @@
 
     <script>
       const baseUrl = "{{ request.base_url | trim('/') }}";
+      
+      // Disable team name when admin checkbox is checked
+      document.addEventListener('DOMContentLoaded', function() {
+        const isAdminCheckbox = document.getElementById('is_admin');
+        const teamNameInput = document.getElementById('team_name');
+        
+        if (isAdminCheckbox) {
+          isAdminCheckbox.addEventListener('change', function() {
+            teamNameInput.disabled = this.checked;
+            if (this.checked) {
+              teamNameInput.value = '';
+            }
+          });
+        }
+      });
+      
       function switchTab(tabName) {
         // Hide all tab contents
         document.querySelectorAll(".tab-content").forEach((tab) => {
@@ -857,7 +883,7 @@
 
       function confirmLanguageDelete(languageName) {
         return confirm(
-          `Are you sure you want to delete the language "${languageName}"? This will also delete all associated gold datasets.`
+          `Are you sure you want to archive the language "${languageName}"? This will also archive all associated gold datasets. The data will be kept in the database but hidden from the dashboard.`
         );
       }
 
@@ -873,6 +899,20 @@
           closeLanguageModal();
         }
       };
+
+      // Prevent browser back button from loading the cached login page; send to homepage
+      (function () {
+        const homeUrl = "{{ url_for('homepage') }}";
+        history.pushState(null, "", window.location.href);
+        window.addEventListener("popstate", () => {
+          window.location.href = homeUrl;
+        });
+        window.addEventListener("pageshow", (evt) => {
+          if (evt.persisted) {
+            window.location.href = homeUrl;
+          }
+        });
+      })();
     </script>
   </body>
 </html>

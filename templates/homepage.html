@@ -80,6 +80,18 @@
         transform: translateY(-2px);
       }
 
+      .logout-btn {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 9px 18px;
+        border-radius: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        transition: all 0.2s ease;
+      }
+
+      .logout-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
       /* Hero Section */
       .hero {
         background: linear-gradient(135deg, #2e5c9a 0%, #4a90e2 100%);
@@ -468,9 +480,14 @@
           <a href="#about">About</a>
           <a href="#leaderboard">Leaderboard</a>
           <a href="#contact">Contact</a>
+          {% if user %}
+          <a href="{{ dashboard_url }}" class="login-btn">Go to Dashboard</a>
+          <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+          {% else %}
           <a href="{{ url_for('login_page') }}" class="login-btn"
             >Login / Participate</a
           >
+          {% endif %}
         </nav>
       </div>
     </header>
@@ -478,7 +495,10 @@
     <!-- Hero Section -->
     <section class="hero">
       <div class="hero-container">
-        <h1>Discourse Evaluation Leaderboard</h1>
+        <h1>Discourse Evaluation Leaderboard Develop Under DL-DiscoMT Project</h1>
+        {% if user %}
+        <p class="hero-subtitle">Welcome back, {{ user.username }}.</p>
+        {% endif %}
         <p class="hero-subtitle">
           Advancing discourse understanding through standardized benchmarking
           and transparent evaluation.
@@ -610,6 +630,7 @@
               <thead>
                 <tr>
                   <th>Rank</th>
+                  <th>Username</th>
                   <th>Team</th>
                   <th>MUC F1</th>
                   <th>B³ F1</th>
@@ -645,8 +666,13 @@
         <div class="footer-section">
           <h3>Quick Links</h3>
           <ul>
+            {% if user %}
+            <li><a href="{{ dashboard_url }}">Dashboard</a></li>
+            <li><a href="{{ url_for('logout') }}">Logout</a></li>
+            {% else %}
             <li><a href="{{ url_for('login_page') }}">Participant Login</a></li>
-            <li><a href="#about">About the Leaderboar</a></li>
+            {% endif %}
+            <li><a href="#about">About the Leaderboard</a></li>
             <li><a href="#leaderboard">Leaderboards</a></li>
           </ul>
         </div>
@@ -658,13 +684,9 @@
             <a href="mailto:irlab@dau.ac.in">irlab@dau.ac.in</a>
           </div>
           <div class="contact-info">
-            <span>📞</span>
-            <span>+91 796826 1638</span>
-          </div>
-          <div class="contact-info">
             <span>🌐</span>
-            <a href="https://irlab.daiict.ac.in/leaderboard"
-              >discourse-eval-2025.org</a
+            <a href="https://irlab.daiict.ac.in/discours-leaderboard"
+              >irlab.daiict.ac.in/discours-leaderboard</a
             >
           </div>
         </div>
@@ -672,7 +694,7 @@
 
       <div class="footer-bottom">
         <p>
-          &copy; 2025 Discourse Evaluation Leaderboard. All rights reserved.
+          &copy; 2025 Discourse Evaluation Leaderboard. All rights reserved DL-DiscoMT. 
         </p>
       </div>
     </footer>
@@ -715,6 +737,7 @@
 
                   row.innerHTML = '<td class="' + rankClass + '">' + rankText + '</td>' +
                       '<td><strong>' + score.username + '</strong></td>' +
+                      '<td><em>' + (score.team_name || 'N/A') + '</em></td>' +
                       '<td class="score">' + (score.muc_f1 ? score.muc_f1.toFixed(4) : 'N/A') + '</td>' +
                       '<td class="score">' + (score.bcub_f1 ? score.bcub_f1.toFixed(4) : 'N/A') + '</td>' +
                       '<td class="score">' + (score.ceafm_f1 ? score.ceafm_f1.toFixed(4) : 'N/A') + '</td>' +

@@ -353,6 +353,7 @@
                   <th>Date</th>
                   <th>File</th>
                   <th>Language</th>
+                  <th>Team</th>
                   <th>MUC F1</th>
                   <th>B-CUBED F1</th>
                   <th>CEAF-M F1</th>
@@ -365,6 +366,7 @@
                   <td>{{ eval.formatted_date }}</td>
                   <td>{{ eval.uploaded_filename }}</td>
                   <td>{{ eval.language_name }}</td>
+                  <td>{{ eval.team_name if eval.team_name else 'N/A' }}</td>
                   <td class="score">
                     {{ "%.4f"|format(eval.muc_f1) if eval.muc_f1 else "N/A" }}
                   </td>
@@ -490,6 +492,22 @@
       function refreshHistory() {
         window.location.reload();
       }
+
+      // Prevent back button from showing the cached login page; send user to homepage instead
+      (function () {
+        const homeUrl = "{{ url_for('homepage') }}";
+        // Ensure a popstate will fire on back
+        history.pushState(null, "", window.location.href);
+        window.addEventListener("popstate", () => {
+          window.location.href = homeUrl;
+        });
+        // Handle bfcache restores
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) {
+            window.location.href = homeUrl;
+          }
+        });
+      })();
     </script>
   </body>
 </html>

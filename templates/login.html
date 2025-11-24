@@ -547,7 +547,7 @@
         </p>
       </div>
 
-      <div id="errorMessage" class="error-message"></div>
+      <div id="errorMessage" class="error-message">{% if error %}{{ error }}{% endif %}</div>
       <div id="successMessage" class="success-message"></div>
 
       <form id="loginForm" method="post" action="{{ url_for('login') }}">
@@ -679,12 +679,15 @@
           document.getElementById("successMessage").style.display = "none";
         });
 
-      // Check for error message from server (if redirected back with error)
+      // Check for error message from server (displayed in the div)
       window.onload = function () {
-        const urlParams = new URLSearchParams(window.location.search);
-        const error = urlParams.get("error");
-        if (error) {
-          showMessage(decodeURIComponent(error), "error");
+        const errorDiv = document.getElementById("errorMessage");
+        if (errorDiv.textContent.trim()) {
+          errorDiv.style.display = "block";
+          // Auto-hide after 5 seconds
+          setTimeout(() => {
+            errorDiv.style.display = "none";
+          }, 5000);
         }
       };
 
