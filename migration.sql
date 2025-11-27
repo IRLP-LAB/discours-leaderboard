@@ -31,14 +31,55 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     INDEX idx_created_at (created_at)
 );
 
--- Step 3a: Add soft delete flags to languages table
+-- Step 3a: Add task column to languages table for multi-task support
+ALTER TABLE languages 
+ADD COLUMN IF NOT EXISTS task VARCHAR(50) NOT NULL DEFAULT 'Coreference' AFTER language_name;
+
+ALTER TABLE languages 
+ADD INDEX IF NOT EXISTS idx_task (task);
+
+-- Ensure language_code is only unique per task (and only for active rows)
+SET @idx_name := (
+    SELECT INDEX_NAME 
+    FROM INFORMATION_SCHEMA.STATISTICS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'languages' 
+      AND INDEX_NAME = 'language_code'
+    LIMIT 1
+);
+SET @sql := IF(@idx_name IS NOT NULL, CONCAT('DROP INDEX `', @idx_name, '` ON `languages`'), 'SELECT 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Remove any unique index on language_name (allow same name across tasks)
+SET @idx_name := (
+    SELECT INDEX_NAME 
+    FROM INFORMATION_SCHEMA.STATISTICS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'languages' 
+      AND INDEX_NAME = 'language_name'
+    LIMIT 1
+);
+SET @sql := IF(@idx_name IS NOT NULL, CONCAT('DROP INDEX `', @idx_name, '` ON `languages`'), 'SELECT 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @uniq_exists := (
+    SELECT COUNT(*) 
+    FROM INFORMATION_SCHEMA.STATISTICS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'languages' 
+      AND INDEX_NAME = 'idx_language_code_task_active'
+);
+SET @sql := IF(@uniq_exists = 0, 'ALTER TABLE `languages` ADD UNIQUE INDEX `idx_language_code_task_active` (`language_code`, `task`, `is_deleted`)', 'SELECT 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Step 3b: Add soft delete flags to languages table
 ALTER TABLE languages 
 ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE AFTER language_name;
 
 ALTER TABLE languages 
 ADD INDEX IF NOT EXISTS idx_is_deleted (is_deleted);
 
--- Step 3b: Add soft delete and version flags to gold_datasets table
+-- Step 3c: Add soft delete and version flags to gold_datasets table
 ALTER TABLE gold_datasets 
 ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE AFTER uploaded_by;
 
@@ -50,6 +91,18 @@ ADD INDEX IF NOT EXISTS idx_is_deleted (is_deleted);
 
 ALTER TABLE gold_datasets 
 ADD INDEX IF NOT EXISTS idx_version (version);
+
+-- Add task column to gold_datasets to support per-task datasets
+ALTER TABLE gold_datasets 
+ADD COLUMN IF NOT EXISTS task VARCHAR(50) NOT NULL DEFAULT 'Coreference' AFTER version;
+
+ALTER TABLE gold_datasets 
+ADD INDEX IF NOT EXISTS idx_gold_task (task);
+
+-- Backfill task on existing gold datasets from languages table when possible
+UPDATE gold_datasets gd
+JOIN languages l ON gd.language_id = l.id
+SET gd.task = COALESCE(l.task, gd.task);
 
 -- Step 4: Update existing admin user to have is_admin flag and NULL team_name
 UPDATE users SET is_admin = TRUE, team_name = NULL WHERE username = 'admin';

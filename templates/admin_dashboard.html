@@ -308,6 +308,19 @@
         font-weight: bold;
       }
 
+      .alert {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-weight: 600;
+      }
+
+      .alert-error {
+        background-color: #ffe6e6;
+        color: #c0392b;
+        border: 1px solid #e74c3c;
+      }
+
       @media (max-width: 768px) {
         .form-grid {
           grid-template-columns: 1fr;
@@ -352,7 +365,11 @@
           <div class="stat-label">Total Users</div>
         </div>
         <div class="stat-card">
-          <div class="stat-number">{{ languages|length }}</div>
+          <div class="stat-number">{{ tasks_count }}</div>
+          <div class="stat-label">Total Tasks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">{{ languages_unique_count }}</div>
           <div class="stat-label">Languages</div>
         </div>
         <div class="stat-card">
@@ -385,6 +402,13 @@
         <div class="user-grid">
           <div class="form-section">
             <h3>Add New User</h3>
+            <div
+              id="userError"
+              class="alert alert-error"
+              style="{% if not request.query_params.get('user_error') %}display:none;{% endif %}"
+            >
+              {{ request.query_params.get('user_error') or "" }}
+            </div>
             <form method="post" action="{{ url_for('add_user') }}" id="addUserForm">
               <div class="form-row">
                 <div class="form-group">
@@ -426,6 +450,7 @@
                     <th>Username</th>
                     <th>Team Name</th>
                     <th>Email</th>
+                    <th>User Type</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -436,6 +461,7 @@
                     <td>{{ user.username }}</td>
                     <td>{{ user.team_name or 'N/A' }}</td>
                     <td>{{ user.email }}</td>
+                    <td>{{ 'Admin' if user.is_admin else 'User' }}</td>
                     <td
                       class="{{ 'status-active' if user.is_active else 'status-inactive' }}"
                     >
@@ -486,7 +512,21 @@
         <div class="form-grid">
           <div class="form-section">
             <h3>Add New Language</h3>
+            {% if request.query_params.get('lang_error') %}
+            <div class="alert alert-error">
+              {{ request.query_params.get('lang_error') }}
+            </div>
+            {% endif %}
             <form method="post" action="{{ url_for('add_language') }}">
+              <div class="form-group">
+                <label for="task">Task:</label>
+                <select id="task" name="task" required>
+                  <option value="">Select task...</option>
+                  {% for task_option in task_suggestions %}
+                  <option value="{{ task_option }}">{{ task_option }}</option>
+                  {% endfor %}
+                </select>
+              </div>
               <div class="form-group">
                 <label for="language_code">Language Code:</label>
                 <input
@@ -526,6 +566,7 @@
               <table>
                 <thead>
                   <tr>
+                    <th>Task</th>
                     <th>Language Code</th>
                     <th>Language Name</th>
                     <th>Gold Datasets</th>
@@ -535,6 +576,7 @@
                 <tbody>
                   {% for lang in languages %}
                   <tr>
+                    <td>{{ lang.task or 'Coreference' }}</td>
                     <td>
                       <span class="language-code"
                         >{{ lang.language_code }}</span
@@ -551,7 +593,7 @@
                       <div class="action-buttons">
                         <button
                           class="btn btn-small"
-                          onclick="editLanguage('{{ lang.id }}', '{{ lang.language_code }}', '{{ lang.language_name }}')"
+                          onclick="editLanguage('{{ lang.id }}', '{{ lang.language_code }}', '{{ lang.language_name }}', '{{ lang.task or 'Coreference' }}')"
                         >
                           Edit
                         </button>
@@ -592,20 +634,32 @@
         <div class="form-grid">
           <div class="form-section">
             <h3>Upload Gold Dataset</h3>
+            <div
+              id="datasetError"
+              class="alert alert-error"
+              style="{% if not request.query_params.get('dataset_error') %}display:none;{% endif %}"
+            >
+              {{ request.query_params.get('dataset_error') or "" }}
+            </div>
             <form
               method="post"
               action="{{ url_for('upload_gold_dataset') }}"
               enctype="multipart/form-data"
+              id="uploadDatasetForm"
             >
+              <div class="form-group">
+                <label for="dataset_task">Task:</label>
+                <select id="dataset_task" name="task" required>
+                  <option value="">Select Task...</option>
+                  {% for task_option in task_suggestions %}
+                  <option value="{{ task_option }}">{{ task_option }}</option>
+                  {% endfor %}
+                </select>
+              </div>
               <div class="form-group">
                 <label for="language_id">Language:</label>
                 <select id="language_id" name="language_id" required>
                   <option value="">Select Language...</option>
-                  {% for lang in languages %}
-                  <option value="{{ lang.id }}">
-                    {{ lang.language_name }} ({{ lang.language_code }})
-                  </option>
-                  {% endfor %}
                 </select>
               </div>
               <div class="form-group">
@@ -635,6 +689,7 @@
               <table>
                 <thead>
                   <tr>
+                    <th>Task</th>
                     <th>Language</th>
                     <th>Filename</th>
                     <th>Uploaded By</th>
@@ -645,6 +700,7 @@
                 <tbody>
                   {% for dataset in gold_datasets %}
                   <tr>
+                    <td>{{ dataset.language_task or 'N/A' }}</td>
                     <td>{{ dataset.language_name }}</td>
                     <td>{{ dataset.filename }}</td>
                     <td>{{ dataset.uploaded_by }}</td>
@@ -700,6 +756,7 @@
                     <th>User</th>
                     <th>Team</th>
                     <th>Activity</th>
+                    <th>Task</th>
                     <th>Language</th>
                     <th>File</th>
                     <th>Date/Time</th>
@@ -711,6 +768,7 @@
                     <td>{{ activity.username }}</td>
                     <td>{{ activity.team_name or 'N/A' }}</td>
                     <td>{{ activity.activity_type|title }}</td>
+                    <td>{{ activity.language_task or 'N/A' }}</td>
                     <td>{{ activity.language_used or 'N/A' }}</td>
                     <td>{{ activity.file_uploaded or 'N/A' }}</td>
                     <td>{{ activity.formatted_date }}</td>
@@ -730,6 +788,13 @@
         </div>
       </div>
     </div>
+
+    <script type="application/json" id="languageData">
+      {{ (languages_json or [])|tojson }}
+    </script>
+    <script type="application/json" id="datasetData">
+      {{ (gold_datasets_json or [])|tojson }}
+    </script>
 
     <!-- Edit User Modal -->
     <div
@@ -759,6 +824,7 @@
       >
         <h3 style="margin-bottom: 20px; color: #2c3e50">Edit User</h3>
         <form id="editUserForm" method="post">
+          <input type="hidden" name="is_active" id="edit_is_active_value" value="true" />
           <div class="form-group">
             <label for="edit_username">Username:</label>
             <input type="text" id="edit_username" name="username" required />
@@ -772,7 +838,6 @@
               <input
                 type="checkbox"
                 id="edit_is_active"
-                name="is_active"
                 value="true"
               />
               Active
@@ -817,6 +882,14 @@
         <h3 style="margin-bottom: 20px; color: #2c3e50">Edit Language</h3>
         <form id="editLanguageForm" method="post">
           <div class="form-group">
+            <label for="edit_language_task">Task:</label>
+            <select id="edit_language_task" name="task" required>
+              {% for task_option in task_suggestions %}
+              <option value="{{ task_option }}">{{ task_option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
             <label for="edit_language_code">Language Code:</label>
             <input
               type="text"
@@ -854,6 +927,16 @@
       document.addEventListener('DOMContentLoaded', function() {
         const isAdminCheckbox = document.getElementById('is_admin');
         const teamNameInput = document.getElementById('team_name');
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        const userErrorEl = document.getElementById('userError');
+        const addUserForm = document.getElementById('addUserForm');
+        if (addUserForm && userErrorEl) {
+          addUserForm.addEventListener('input', () => {
+            userErrorEl.style.display = 'none';
+            userErrorEl.textContent = '';
+          });
+        }
         
         if (isAdminCheckbox) {
           isAdminCheckbox.addEventListener('change', function() {
@@ -862,6 +945,10 @@
               teamNameInput.value = '';
             }
           });
+        }
+
+        if (tabParam) {
+          switchTab(tabParam);
         }
       });
       
@@ -880,22 +967,40 @@
         document.getElementById(tabName).classList.add("active");
 
         // Add active class to clicked button
-        event.target.classList.add("active");
+        if (event && event.target && event.target.classList.contains("tab-button")) {
+          event.target.classList.add("active");
+        } else {
+          const matchingButton = document.querySelector(`.tab-button[onclick*="${tabName}"]`);
+          if (matchingButton) {
+            matchingButton.classList.add("active");
+          }
+        }
       }
 
       function editUser(id, username, email, isActive) {
         document.getElementById("edit_username").value = username;
         document.getElementById("edit_email").value = email;
-        document.getElementById("edit_is_active").checked = isActive === "true";
+        const isActiveCheckbox = document.getElementById("edit_is_active");
+        const isActiveHidden = document.getElementById("edit_is_active_value");
+        const activeState = isActive === "true";
+        if (isActiveCheckbox) isActiveCheckbox.checked = activeState;
+        if (isActiveHidden) isActiveHidden.value = activeState ? "true" : "false";
+        if (isActiveCheckbox) {
+          isActiveCheckbox.onchange = () => {
+            const checked = isActiveCheckbox.checked;
+            if (isActiveHidden) isActiveHidden.value = checked ? "true" : "false";
+          };
+        }
         document.getElementById(
           "editUserForm"
         ).action = `${baseUrl}/admin/update_user/${id}`;
         document.getElementById("editUserModal").style.display = "block";
       }
 
-      function editLanguage(id, languageCode, languageName) {
+      function editLanguage(id, languageCode, languageName, task) {
         document.getElementById("edit_language_code").value = languageCode;
         document.getElementById("edit_language_name").value = languageName;
+        document.getElementById("edit_language_task").value = task;
         document.getElementById(
           "editLanguageForm"
         ).action = `${baseUrl}/admin/update_language/${id}`;
@@ -915,6 +1020,72 @@
           `Are you sure you want to archive the language "${languageName}"? This will also archive all associated gold datasets. The data will be kept in the database but hidden from the dashboard.`
         );
       }
+
+      // Filter languages by selected task in Gold Dataset upload form
+      (function setupDatasetFilters() {
+        const langDataEl = document.getElementById("languageData");
+        const datasetDataEl = document.getElementById("datasetData");
+        if (!langDataEl) return;
+        const allLanguages = JSON.parse(langDataEl.textContent || "[]");
+        const allDatasets = datasetDataEl ? JSON.parse(datasetDataEl.textContent || "[]") : [];
+        const taskSelect = document.getElementById("dataset_task");
+        const languageSelect = document.getElementById("language_id");
+        const uploadForm = document.getElementById("uploadDatasetForm");
+        const datasetErrorEl = document.getElementById("datasetError");
+
+        function clearDatasetError() {
+          if (datasetErrorEl) {
+            datasetErrorEl.style.display = "none";
+            datasetErrorEl.textContent = "";
+          }
+        }
+
+        function renderLanguageOptions(task) {
+          languageSelect.innerHTML = '<option value="">Select Language...</option>';
+          if (!task) return;
+          const filtered = allLanguages.filter(
+            (lang) => (lang.task || "Coreference") === task && !lang.is_deleted
+          );
+          filtered.forEach((lang) => {
+            const opt = document.createElement("option");
+            opt.value = lang.id;
+            opt.textContent = `${lang.language_name} (${lang.language_code})`;
+            languageSelect.appendChild(opt);
+          });
+        }
+
+        if (taskSelect && languageSelect) {
+          taskSelect.addEventListener("change", (e) => {
+            renderLanguageOptions(e.target.value);
+            clearDatasetError();
+          });
+          languageSelect.addEventListener("change", clearDatasetError);
+        }
+
+        if (uploadForm) {
+          uploadForm.addEventListener("submit", (e) => {
+            clearDatasetError();
+            const langId = languageSelect.value;
+            const task = taskSelect.value;
+            if (!langId || !task) return;
+            const langObj = allLanguages.find((l) => String(l.id) === String(langId));
+            const langName = langObj ? `${langObj.language_name} (${langObj.language_code})` : "this language";
+            const existing = allDatasets.find(
+              (ds) =>
+                String(ds.language_id) === String(langId) &&
+                (ds.language_task || ds.task || "Coreference") === task &&
+                !ds.is_deleted
+            );
+            if (existing) {
+              e.preventDefault();
+              if (datasetErrorEl) {
+                datasetErrorEl.textContent = `Dataset already exists for ${task} - ${langName}.`;
+                datasetErrorEl.style.display = "block";
+              }
+            }
+          });
+        }
+      })();
 
       // Close modals when clicking outside
       window.onclick = function (event) {

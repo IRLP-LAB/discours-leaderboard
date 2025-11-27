@@ -242,6 +242,65 @@
         box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
       }
 
+      .filter-bar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background: #f8f9fb;
+        border: 1px solid #e4e7ec;
+        border-radius: 14px;
+      }
+
+      .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        border: 1px solid #e0e5f0;
+        border-radius: 10px;
+        padding: 8px 10px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+      }
+
+      .filter-label {
+        font-weight: 600;
+        color: #344054;
+        font-size: 14px;
+        white-space: nowrap;
+      }
+
+      .filter-group select {
+        border: none;
+        background: transparent;
+        padding: 6px 4px;
+        font-size: 14px;
+        min-width: 160px;
+        color: #1e3c72;
+        font-weight: 600;
+      }
+
+      .filter-group select:focus {
+        outline: none;
+      }
+
+      .reset-btn {
+        border: 1px solid #e74c3c;
+        color: #e74c3c;
+        background: #fff5f3;
+        padding: 10px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s ease;
+      }
+
+      .reset-btn:hover {
+        background: #fdecea;
+      }
+
       .language-title {
         font-size: 1.5rem;
         font-weight: bold;
@@ -524,6 +583,57 @@
       </div>
     </section>
 
+    <!-- Leaderboard Section -->
+    <section class="leaderboard" id="leaderboard">
+      <div class="container">
+        <h2 class="section-title">Discourse Leaderboards</h2>
+        <p class="section-subtitle">
+          Filter by task and language to explore the latest submissions in one unified view.
+        </p>
+
+        <div class="filter-bar">
+          <div class="filter-group">
+            <span class="filter-label">Task</span>
+            <select id="filter-task">
+              <option value="">Select task</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Language</span>
+            <select id="filter-language">
+              <option value="">Select language</option>
+            </select>
+          </div>
+          <button class="reset-btn" id="reset-filters">↻ Reset Filters</button>
+        </div>
+
+        <div class="leaderboard-container">
+          <div class="language-leaderboard">
+            <table class="leaderboard-table" id="leaderboard-table">
+              <thead id="leaderboard-head">
+                <tr>
+                  <th>Rank</th>
+                  <th>Team</th>
+                  <th>Task</th>
+                  <th>Language</th>
+                  <th>MUC F1</th>
+                  <th>B³ F1</th>
+                  <th>CEAF F1</th>
+                  <th>BLANC F1</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboard-body">
+                <!-- Filled by JS -->
+              </tbody>
+            </table>
+            <div class="no-data" id="leaderboard-empty" style="display: none">
+              <p>No evaluations match these filters.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- About Section -->
     <section class="about" id="about">
       <div class="container">
@@ -607,58 +717,6 @@
       </div>
     </section>
 
-    <!-- Leaderboard Section -->
-    <section class="leaderboard" id="leaderboard">
-      <div class="container">
-        <h2 class="section-title">Discourse Leaderboards</h2>
-        <p class="section-subtitle">
-          Top performing systems across different languages - each language
-          ranked separately
-        </p>
-
-        <div class="leaderboard-container">
-          {% for language_data in leaderboards %}
-          <div class="language-leaderboard">
-            <h3 class="language-title">
-              {{ language_data.language_name }}
-              <span class="language-code"
-                >{{ language_data.language_code.upper() }}</span
-              >
-            </h3>
-            {% if language_data.top_scores %}
-            <table class="leaderboard-table">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Team</th>
-                  <th>MUC F1</th>
-                  <th>B³ F1</th>
-                  <th>CEAF F1</th>
-                  <th>BLANC F1</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-lang-{{ language_data.language_id }}">
-                <!-- Rows will be populated by JavaScript -->
-              </tbody>
-            </table>
-            <div
-              class="pagination"
-              id="pagination-lang-{{ language_data.language_id }}"
-            >
-              <!-- Pagination will be populated by JavaScript -->
-            </div>
-            {% else %}
-            <div class="no-data">
-              <p>No evaluations submitted yet</p>
-              <p>Be the first to participate!</p>
-            </div>
-            {% endif %}
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </section>
-
     <!-- Footer -->
     <footer class="footer" id="contact">
       <div class="footer-content">
@@ -699,92 +757,134 @@
     </footer>
 
     <script>
-      // Store all leaderboard data
-      const leaderboardData = {};
-          {% for language_data in leaderboards %}
-          leaderboardData[{{ language_data.language_id }}] = {{ language_data.top_scores | tojson | safe }};
-          {% endfor %}
-
-          const itemsPerPage = 5;
-          const currentPages = {};
-
-          function renderTable(languageId, page) {
-              const allScores = leaderboardData[languageId];
-              if (!allScores || allScores.length === 0) return;
-
-              const tbody = document.getElementById('tbody-lang-' + languageId);
-              const start = (page - 1) * itemsPerPage;
-              const end = start + itemsPerPage;
-              const pageScores = allScores.slice(start, end);
-
-              tbody.innerHTML = '';
-
-              pageScores.forEach(function(score, index) {
-                  const globalRank = start + index + 1;
-                  const row = document.createElement('tr');
-
-                  let rankClass = '';
-                  let rankText = globalRank;
-
-                  if (globalRank === 1) {
-                      rankText = '1';
-                  } else if (globalRank === 2) {
-                      rankText = '2';
-                  } else if (globalRank === 3) {
-                      rankText = '3';
-                  }
-
-                  row.innerHTML = '<td class="' + rankClass + '">' + rankText + '</td>' +
-                      '<td><em>' + (score.team_name || 'N/A') + '</em></td>' +
-                      '<td class="score">' + (score.muc_f1 ? score.muc_f1.toFixed(4) : 'N/A') + '</td>' +
-                      '<td class="score">' + (score.bcub_f1 ? score.bcub_f1.toFixed(4) : 'N/A') + '</td>' +
-                      '<td class="score">' + (score.ceafm_f1 ? score.ceafm_f1.toFixed(4) : 'N/A') + '</td>' +
-                      '<td class="score">' + (score.blanc_f1 ? score.blanc_f1.toFixed(4) : 'N/A') + '</td>';
-
-                  tbody.appendChild(row);
-              });
-          }
-
-          function renderPagination(languageId) {
-              const allScores = leaderboardData[languageId];
-              if (!allScores || allScores.length === 0) return;
-
-              const totalPages = Math.ceil(allScores.length / itemsPerPage);
-              const currentPage = currentPages[languageId] || 1;
-              const pagination = document.getElementById('pagination-lang-' + languageId);
-
-              if (totalPages <= 1) {
-                  pagination.style.display = 'none';
-                  return;
-              }
-
-              pagination.innerHTML = '<button onclick="changePage(' + languageId + ', ' + (currentPage - 1) + ')" ' + (currentPage === 1 ? 'disabled' : '') + '>Previous</button>' +
-                  '<span class="page-info">Page ' + currentPage + ' of ' + totalPages + '</span>' +
-                  '<button onclick="changePage(' + languageId + ', ' + (currentPage + 1) + ')" ' + (currentPage === totalPages ? 'disabled' : '') + '>Next</button>';
-          }
-
-          function changePage(languageId, page) {
-              const allScores = leaderboardData[languageId];
-              if (!allScores || allScores.length === 0) return;
-
-              const totalPages = Math.ceil(allScores.length / itemsPerPage);
-              if (page < 1 || page > totalPages) return;
-
-              currentPages[languageId] = page;
-              renderTable(languageId, page);
-              renderPagination(languageId);
-          }
-
-          // Initialize all leaderboards on page load
-          document.addEventListener('DOMContentLoaded', function() {
-              for (var languageId in leaderboardData) {
-                  if (leaderboardData.hasOwnProperty(languageId)) {
-                      currentPages[languageId] = 1;
-                      renderTable(parseInt(languageId), 1);
-                      renderPagination(parseInt(languageId));
-                  }
-              }
+      // Unified leaderboard with task/language filters
+      const rawLeaderboards = {{ leaderboards|tojson }};
+      const allEntries = [];
+      rawLeaderboards.forEach(lang => {
+        (lang.top_scores || []).forEach(score => {
+          const micro_precision = score.muc_precision ?? null;
+          const micro_recall = score.muc_recall ?? null;
+          const micro_f1 = score.muc_f1 ?? null;
+          const micro_accuracy = score.blanc_f1 ?? null;
+          allEntries.push({
+            language: lang.language_name,
+            language_code: lang.language_code,
+            task: lang.task || "Coreference",
+            team: score.team_name || score.username || "N/A",
+            muc_f1: score.muc_f1,
+            bcub_f1: score.bcub_f1,
+            ceafm_f1: score.ceafm_f1,
+            blanc_f1: score.blanc_f1,
+            micro_precision,
+            micro_recall,
+            micro_f1,
+            micro_accuracy,
+            avg_f1: score.avg_f1
           });
+        });
+      });
+
+      const taskSelect = document.getElementById("filter-task");
+      const languageSelect = document.getElementById("filter-language");
+      const resetBtn = document.getElementById("reset-filters");
+      const thead = document.getElementById("leaderboard-head");
+      const tbody = document.getElementById("leaderboard-body");
+      const emptyState = document.getElementById("leaderboard-empty");
+      const metricLayouts = {
+        coref: [
+          { key: "muc_f1", label: "MUC F1" },
+          { key: "bcub_f1", label: "B³ F1" },
+          { key: "ceafm_f1", label: "CEAF F1" },
+          { key: "blanc_f1", label: "BLANC F1" },
+        ],
+        micro: [
+          { key: "micro_precision", label: "Micro P" },
+          { key: "micro_recall", label: "Micro R" },
+          { key: "micro_f1", label: "Micro F1" },
+          { key: "micro_accuracy", label: "Micro Acc" },
+        ],
+      };
+
+      // Populate filter options
+      const tasks = Array.from(new Set(allEntries.map(e => e.task).filter(Boolean))).sort();
+      const languages = Array.from(new Set(allEntries.map(e => `${e.language}|||${e.language_code}`))).sort();
+      tasks.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        taskSelect.appendChild(opt);
+      });
+      languages.forEach(l => {
+        const [name, code] = l.split("|||");
+        const opt = document.createElement("option");
+        opt.value = code;
+        opt.textContent = `${name} (${code})`;
+        languageSelect.appendChild(opt);
+      });
+
+      function applyFilters() {
+        const taskVal = taskSelect.value;
+        const langVal = languageSelect.value;
+        let filtered = allEntries.slice();
+        if (taskVal) filtered = filtered.filter(e => e.task === taskVal);
+        if (langVal) filtered = filtered.filter(e => e.language_code === langVal);
+        filtered.sort((a, b) => (b.avg_f1 || 0) - (a.avg_f1 || 0));
+
+        tbody.innerHTML = "";
+        if (!filtered.length) {
+          emptyState.style.display = "block";
+          return;
+        }
+        emptyState.style.display = "none";
+
+        const layout =
+          (taskVal && (taskVal.toLowerCase().includes("pos") || taskVal.toLowerCase().includes("chunk")))
+            ? metricLayouts.micro
+            : metricLayouts.coref;
+
+        const headCols = `
+          <tr>
+            <th>Rank</th>
+            <th>Team</th>
+            <th>Task</th>
+            <th>Language</th>
+            ${layout.map(m => `<th>${m.label}</th>`).join("")}
+          </tr>
+        `;
+        thead.innerHTML = headCols;
+
+        filtered.forEach((entry, idx) => {
+          const row = document.createElement("tr");
+          const metricCells = layout.map(m => {
+            const val = entry[m.key];
+            return `<td class="score">${val != null ? Number(val).toFixed(4) : "N/A"}</td>`;
+          }).join("");
+          row.innerHTML = `
+            <td>${idx + 1}</td>
+            <td><em>${entry.team}</em></td>
+            <td>${entry.task}</td>
+            <td>${entry.language} (${entry.language_code})</td>
+            ${metricCells}
+          `;
+          tbody.appendChild(row);
+        });
+      }
+
+      // Set defaults
+      const defaultTask = tasks.find(t => t.toLowerCase() === "coreference") || tasks[0] || "";
+      const defaultLang = languages.find(l => l.toLowerCase().includes("(hi)")) || languages[0] || "";
+      taskSelect.value = defaultTask || "";
+      languageSelect.value = defaultLang ? defaultLang.split("|||").pop() || defaultLang.split("(").pop().replace(")", "") : "";
+
+      taskSelect.addEventListener("change", applyFilters);
+      languageSelect.addEventListener("change", applyFilters);
+      resetBtn.addEventListener("click", () => {
+        taskSelect.value = defaultTask || "";
+        languageSelect.value = defaultLang ? defaultLang.split("|||").pop() || defaultLang.split("(").pop().replace(")", "") : "";
+        applyFilters();
+      });
+
+      applyFilters();
     </script>
   </body>
 </html>

@@ -297,15 +297,22 @@
           <h2>📤 Upload & Evaluate</h2>
           <form id="evaluationForm" enctype="multipart/form-data">
             <div class="form-group">
+              <label for="task">Select Task:</label>
+              <select id="task" name="task" required>
+                <option value="">Choose a task...</option>
+                {% for task in task_suggestions %}
+                <option value="{{ task }}">{{ task }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
               <label for="language">Select Language:</label>
               <select id="language" name="language_id" required>
                 <option value="">Choose a language...</option>
-                {% for lang in languages %}
-                <option value="{{ lang.id }}">
-                  {{ lang.language_name }} ({{ lang.language_code }})
-                </option>
-                {% endfor %}
               </select>
+              <div id="language-empty" style="display: none; color: #c0392b; font-size: 12px; margin-top: 6px;">
+                No languages with datasets for this task yet.
+              </div>
             </div>
 
             <div class="form-group">
@@ -345,47 +352,76 @@
 
         <div class="card">
           <h2>📈 Evaluation History</h2>
-          {% if history %}
-          <div style="overflow-x: auto">
-            <table class="history-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>File</th>
-                  <th>Language</th>
-                  <th>Team</th>
-                  <th>MUC F1</th>
-                  <th>B-CUBED F1</th>
-                  <th>CEAF-M F1</th>
-                  <th>BLANC F1</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for eval in history %}
-                <tr>
-                  <td>{{ eval.formatted_date }}</td>
-                  <td>{{ eval.uploaded_filename }}</td>
-                  <td>{{ eval.language_name }}</td>
-                  <td>{{ eval.team_name if eval.team_name else 'N/A' }}</td>
-                  <td class="score">
-                    {{ "%.4f"|format(eval.muc_f1) if eval.muc_f1 else "N/A" }}
-                  </td>
-                  <td class="score">
-                    {{ "%.4f"|format(eval.bcub_f1) if eval.bcub_f1 else "N/A" }}
-                  </td>
-                  <td class="score">
-                    {{ "%.4f"|format(eval.ceafm_f1) if eval.ceafm_f1 else "N/A"
-                    }}
-                  </td>
-                  <td class="score">
-                    {{ "%.4f"|format(eval.blanc_f1) if eval.blanc_f1 else "N/A"
-                    }}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+          <div
+            id="clientError"
+            class="alert alert-error"
+            style="display: none; margin-bottom: 12px;"
+          ></div>
+          {% if history_by_task %}
+            {% for task_name, task_history in history_by_task.items() %}
+            <h3 style="margin-top: 12px;">{{ task_name }}</h3>
+            <div style="overflow-x: auto; margin-bottom: 18px;">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>File</th>
+                    <th>Language</th>
+                    <th>Team</th>
+                    {% set task_lower = task_name|lower %}
+                    {% if 'pos' in task_lower or 'chunk' in task_lower %}
+                    <th>Micro P</th>
+                    <th>Micro R</th>
+                    <th>Micro F1</th>
+                    <th>Micro Acc</th>
+                    {% else %}
+                    <th>MUC F1</th>
+                    <th>B-CUBED F1</th>
+                    <th>CEAF-M F1</th>
+                    <th>BLANC F1</th>
+                    {% endif %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for eval in task_history %}
+                  <tr>
+                    <td>{{ eval.formatted_date }}</td>
+                    <td>{{ eval.uploaded_filename }}</td>
+                    <td>{{ eval.language_name }}</td>
+                    <td>{{ eval.team_name if eval.team_name else 'N/A' }}</td>
+                    {% if 'pos' in task_lower or 'chunk' in task_lower %}
+                    <td class="score">
+                      {{ "%.4f"|format(eval.micro_precision) if eval.micro_precision is not none else "N/A" }}
+                    </td>
+                    <td class="score">
+                      {{ "%.4f"|format(eval.micro_recall) if eval.micro_recall is not none else "N/A" }}
+                    </td>
+                    <td class="score">
+                      {{ "%.4f"|format(eval.micro_f1) if eval.micro_f1 is not none else "N/A" }}
+                    </td>
+                    <td class="score">
+                      {{ "%.4f"|format(eval.micro_accuracy) if eval.micro_accuracy is not none else "N/A" }}
+                    </td>
+                    {% else %}
+                    <td class="score">
+                      {{ "%.4f"|format(eval.muc_f1) if eval.muc_f1 is not none else "N/A" }}
+                    </td>
+                    <td class="score">
+                      {{ "%.4f"|format(eval.bcub_f1) if eval.bcub_f1 is not none else "N/A" }}
+                    </td>
+                    <td class="score">
+                      {{ "%.4f"|format(eval.ceafm_f1) if eval.ceafm_f1 is not none else "N/A" }}
+                    </td>
+                    <td class="score">
+                      {{ "%.4f"|format(eval.blanc_f1) if eval.blanc_f1 is not none else "N/A" }}
+                    </td>
+                    {% endif %}
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endfor %}
           {% else %}
           <div class="no-history">
             <p>
@@ -398,12 +434,23 @@
       </div>
     </div>
 
+    <script type="application/json" id="clientLanguageData">
+      {{ languages|tojson }}
+    </script>
+
     <script>
       const baseUrl = "{{ request.base_url | trim('/') }}";
       document
         .getElementById("evaluationForm")
         .addEventListener("submit", async function (e) {
           e.preventDefault();
+
+          // Guard: ensure languages exist for selected task
+          const emptyNotice = document.getElementById("language-empty");
+          if (emptyNotice && emptyNotice.style.display === "block") {
+            alert("No gold dataset available for the selected task yet.");
+            return;
+          }
 
           const formData = new FormData(this);
           const submitBtn = document.getElementById("submitBtn");
@@ -424,16 +471,32 @@
 
             const data = await response.json();
 
+            const errorBox = document.getElementById("clientError");
+            if (errorBox) {
+              errorBox.style.display = "none";
+              errorBox.textContent = "";
+            }
+
             if (response.ok && data.success) {
               displayResults(data.scores);
               showSuccessMessage();
-              // Reset form
               document.getElementById("evaluationForm").reset();
             } else {
-              alert("Error: " + (data.detail || "Unknown error occurred"));
+              if (errorBox) {
+                errorBox.style.display = "block";
+                errorBox.textContent = data.detail || "Unknown error occurred";
+              } else {
+                alert("Error: " + (data.detail || "Unknown error occurred"));
+              }
             }
           } catch (error) {
-            alert("Error: " + error.message);
+            const errorBox = document.getElementById("clientError");
+            if (errorBox) {
+              errorBox.style.display = "block";
+              errorBox.textContent = error.message;
+            } else {
+              alert("Error: " + error.message);
+            }
           } finally {
             // Reset form state
             submitBtn.disabled = false;
@@ -442,11 +505,75 @@
           }
         });
 
+      // Filter languages by selected task
+      (function setupClientFilters() {
+        const langDataEl = document.getElementById("clientLanguageData");
+        if (!langDataEl) return;
+        const allLanguages = JSON.parse(langDataEl.textContent || "[]");
+        const taskSelect = document.getElementById("task");
+        const languageSelect = document.getElementById("language");
+        const emptyNotice = document.getElementById("language-empty");
+        const submitBtn = document.getElementById("submitBtn");
+
+        function renderLanguageOptions(task) {
+          languageSelect.innerHTML = '<option value="">Choose a language...</option>';
+          let hasOptions = false;
+          if (!task) {
+            if (emptyNotice) emptyNotice.style.display = "none";
+            if (submitBtn) submitBtn.disabled = true;
+            return;
+          }
+          const filtered = allLanguages.filter(
+            (lang) => (lang.task || "Coreference") === task && !lang.is_deleted
+          );
+          if (filtered.length === 0) {
+            if (emptyNotice) emptyNotice.style.display = "block";
+            languageSelect.disabled = true;
+            if (submitBtn) submitBtn.disabled = true;
+            return;
+          } else if (emptyNotice) {
+            emptyNotice.style.display = "none";
+          }
+          languageSelect.disabled = false;
+          hasOptions = true;
+          filtered.forEach((lang) => {
+            const opt = document.createElement("option");
+            opt.value = lang.id;
+            opt.textContent = `${lang.language_name} (${lang.language_code})`;
+            languageSelect.appendChild(opt);
+          });
+          if (submitBtn) submitBtn.disabled = !hasOptions;
+        }
+
+        if (taskSelect && languageSelect) {
+          taskSelect.addEventListener("change", (e) => {
+            renderLanguageOptions(e.target.value);
+          });
+          // Initialize disabled state on load
+          if (submitBtn) submitBtn.disabled = true;
+        }
+      })();
+
       function displayResults(scores) {
         const container = document.getElementById("scoresContainer");
         const results = document.getElementById("results");
 
         let html = "";
+
+        if (scores.micro) {
+          const m = scores.micro;
+          html += `
+            <div class="metric-row">
+              <span class="metric-name">Micro</span>
+              <div class="metric-values">
+                <span class="metric-value">P: ${Number(m.precision ?? 0).toFixed(4)}</span>
+                <span class="metric-value">R: ${Number(m.recall ?? 0).toFixed(4)}</span>
+                <span class="metric-value">F1: ${Number(m.f1 ?? 0).toFixed(4)}</span>
+                <span class="metric-value">Acc: ${Number(m.accuracy ?? 0).toFixed(4)}</span>
+              </div>
+            </div>
+          `;
+        }
 
         const metrics = [
           { name: "MUC", key: "muc" },

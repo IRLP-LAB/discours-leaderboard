@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Depends, HTTPException, status, Form, File, UploadFile, Cookie
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import mysql.connector
 import bcrypt
@@ -9,13 +9,50 @@ import subprocess
 import tempfile
 import shutil
 from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 import re
 import platform
 import time
+from urllib.parse import urlencode
 
 
 app = FastAPI(root_path="/discours-leaderboard")
+
+DEFAULT_TASK_SUGGESTIONS = ["Coreference", "POS Tag", "Chunk"]
+
+@app.exception_handler(HTTPException)
+async def handle_http_exception(request: Request, exc: HTTPException):
+    """Redirect unauthenticated users to login; otherwise return JSON detail."""
+    if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+        login_url = request.url_for("login_page")
+        # Preserve the originally requested path so we can redirect back after login later if desired
+        if request.url.path and request.url.path != "/login":
+            login_url = f"{login_url}?next={request.url.path}"
+        return RedirectResponse(url=login_url, status_code=302)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+def redirect_to_admin(
+    tab: str | None = None,
+    lang_error: str | None = None,
+    dataset_error: str | None = None,
+    user_error: str | None = None,
+):
+    """Return a relative redirect to the admin dashboard so host stays consistent."""
+    base = app.root_path.rstrip("/") if app.root_path else ""
+    url = f"{base}/admin"
+    params = {}
+    if tab:
+        params["tab"] = tab
+    if lang_error:
+        params["lang_error"] = lang_error
+    if dataset_error:
+        params["dataset_error"] = dataset_error
+    if user_error:
+        params["user_error"] = user_error
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    return RedirectResponse(url=url, status_code=303)
 
 # Create directories
 Path("templates").mkdir(exist_ok=True)
@@ -64,14 +101,23 @@ DEMO_USERS = {
 }
 
 DEMO_LANGUAGES = [
-    {'id': 1, 'language_code': 'hi', 'language_name': 'Hindi'},
-    {'id': 2, 'language_code': 'en', 'language_name': 'English'}
+    {'id': 1, 'language_code': 'hi', 'language_name': 'Hindi', 'task': 'Coreference'},
+    {'id': 2, 'language_code': 'en', 'language_name': 'English', 'task': 'Coreference'}
 ]
 
 # Demo storage for evaluations and gold datasets
 DEMO_GOLD_DATASETS = []
 DEMO_EVALUATIONS = []
 DEMO_ACTIVITY_LOGS = []
+
+def normalize_task(task: str) -> str:
+    """Normalize and validate incoming task names (freeform, but required)."""
+    task_clean = (task or "").strip()
+    if not task_clean:
+        raise HTTPException(status_code=400, detail="Task selection is required")
+    if len(task_clean) > 50:
+        raise HTTPException(status_code=400, detail="Task name must be 50 characters or less")
+    return task_clean
 
 def get_db_connection():
     try:
@@ -137,8 +183,12 @@ def add_demo_activity(user_id: int, activity_type: str, language_id: int = None,
     team_name = user_record.get('team_name') if user_record else None
     is_admin = user_record.get('is_admin') if user_record else False
     language_used = None
+    language_task = None
     if language_id:
-        language_used = next((lang['language_name'] for lang in DEMO_LANGUAGES if lang['id'] == language_id), None)
+        lang_obj = next((lang for lang in DEMO_LANGUAGES if lang['id'] == language_id), None)
+        if lang_obj:
+            language_used = lang_obj.get('language_name')
+            language_task = lang_obj.get('task')
     
     DEMO_ACTIVITY_LOGS.append({
         'id': len(DEMO_ACTIVITY_LOGS) + 1,
@@ -149,6 +199,7 @@ def add_demo_activity(user_id: int, activity_type: str, language_id: int = None,
         'activity_type': activity_type,
         'language_id': language_id,
         'language_used': language_used,
+        'language_task': language_task,
         'filename': filename,
         'file_uploaded': filename,
         'details': details,
@@ -172,6 +223,9 @@ def authenticate_user(username: str, password: str):
                 conn.close()
     else:
         user = DEMO_USERS.get(username)
+        if user and not user.get('is_active', True):
+            print(f"DEBUG: Demo user inactive: {username}")
+            user = None
         print(f"DEBUG: Database unavailable, using demo users for: {username}")
     
     if not user:
@@ -200,14 +254,25 @@ def authenticate_user(username: str, password: str):
     print(f"DEBUG: Authentication successful for: {username}")
     return user
 
-def find_gold_dataset(language_id: int):
-    """Find the gold dataset for a given language"""
+def find_gold_dataset(language_id: int, task: str | None = None):
+    """Find the gold dataset for a given language (and task if provided)"""
     conn = get_db_connection()
     
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM gold_datasets WHERE language_id = %s ORDER BY created_at DESC LIMIT 1", (language_id,))
+            if task:
+                cursor.execute("""
+                    SELECT * FROM gold_datasets 
+                    WHERE language_id = %s AND task = %s AND is_deleted = FALSE
+                    ORDER BY created_at DESC LIMIT 1
+                """, (language_id, task))
+            else:
+                cursor.execute("""
+                    SELECT * FROM gold_datasets 
+                    WHERE language_id = %s AND is_deleted = FALSE
+                    ORDER BY created_at DESC LIMIT 1
+                """, (language_id,))
             dataset = cursor.fetchone()
             conn.close()
             if dataset:
@@ -220,7 +285,11 @@ def find_gold_dataset(language_id: int):
     # Fallback to demo data
     for dataset in DEMO_GOLD_DATASETS:
         if dataset['language_id'] == language_id:
-            return dataset
+            if task:
+                if dataset.get('task') == task:
+                    return dataset
+            else:
+                return dataset
     
     return None
 
@@ -347,6 +416,58 @@ def run_perl_scorer(gold_file_path: str, system_file_path: str) -> dict:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error running scorer: {str(e)}")
 
+def parse_micro_output(output: str) -> dict:
+    """Parse Micro Precision/Recall/F1/Accuracy lines from python evaluators."""
+    metrics = {}
+    for line in output.splitlines():
+        line = line.strip()
+        if "Micro Precision" in line:
+            match = re.search(r"Micro Precision\s*=\s*([0-9.]+)", line)
+            if match:
+                metrics['precision'] = float(match.group(1))
+        elif "Micro Recall" in line:
+            match = re.search(r"Micro Recall\s*=\s*([0-9.]+)", line)
+            if match:
+                metrics['recall'] = float(match.group(1))
+        elif "Micro F1" in line:
+            match = re.search(r"Micro F1\s*=\s*([0-9.]+)", line)
+            if match:
+                metrics['f1'] = float(match.group(1))
+        elif "Micro Accuracy" in line:
+            match = re.search(r"Micro Accuracy\s*=\s*([0-9.]+)", line)
+            if match:
+                metrics['accuracy'] = float(match.group(1))
+    if metrics:
+        return {'micro': metrics}
+    return {}
+
+def run_python_scorer(script_path: Path, gold_file_path: str, system_file_path: str) -> dict:
+    """Run a Python-based scorer (POS/Chunk) and parse micro metrics."""
+    if not script_path.exists():
+        raise HTTPException(status_code=400, detail=f"Scorer script not found: {script_path}")
+    try:
+        result = subprocess.run(
+            ["python", str(script_path), "--ref", gold_file_path, "--pred", system_file_path],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        print(f"PY SCORER STDOUT:\n{result.stdout}")
+        if result.stderr:
+            print(f"PY SCORER STDERR:\n{result.stderr}")
+        if result.returncode != 0:
+            raise HTTPException(status_code=400, detail=f"Scorer failed with exit code {result.returncode}")
+        scores = parse_micro_output(result.stdout)
+        if not scores:
+            raise HTTPException(status_code=400, detail="Could not parse scorer output for micro metrics.")
+        return scores
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=400, detail="Scorer execution timeout (>120 seconds)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error running scorer: {str(e)}")
+
 def parse_scorer_output(output: str) -> dict:
     """Parse the Perl scorer output to extract metrics"""
     scores = {}
@@ -368,59 +489,71 @@ def parse_scorer_output(output: str) -> dict:
             if "Identification of Mentions:" in line:
                 # Format: "Identification of Mentions: Recall: (291 / 291) 100%      Precision: (291 / 291) 100%     F1: 100%"
                 recall_match = re.search(r'Recall:\s*\([^)]+\)\s*([\d.]+)%', line)
-                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%', line)
-                f1_match = re.search(r'F1:\s*([\d.]+)%', line)
+                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%?', line)
+                f1_match = re.search(r'F1:\s*([\d.]+)%?', line)
                 
                 if recall_match and precision_match and f1_match:
+                    def conv(val):
+                        v = float(val)
+                        return v / 100 if "%" in line or v > 1 else v
                     scores['muc'] = {
-                        'recall': float(recall_match.group(1)) / 100,
-                        'precision': float(precision_match.group(1)) / 100,
-                        'f1': float(f1_match.group(1)) / 100
+                        'recall': conv(recall_match.group(1)),
+                        'precision': conv(precision_match.group(1)),
+                        'f1': conv(f1_match.group(1))
                     }
                     print(f"PARSED MUC (Identification): R={scores['muc']['recall']}, P={scores['muc']['precision']}, F1={scores['muc']['f1']}")
             
             # Parse Coreference links (this is like B-CUBED)
             elif "Coreference links:" in line:
                 # Format: "Coreference links: Recall: (602 / 602) 100%       Precision: (602 / 602) 100%     F1: 100%"
-                recall_match = re.search(r'Recall:\s*\([^)]+\)\s*([\d.]+)%', line)
-                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%', line)
-                f1_match = re.search(r'F1:\s*([\d.]+)%', line)
+                recall_match = re.search(r'Recall:\s*\([^)]+\)\s*([\d.]+)%?', line)
+                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%?', line)
+                f1_match = re.search(r'F1:\s*([\d.]+)%?', line)
                 
                 if recall_match and precision_match and f1_match:
+                    def conv(val):
+                        v = float(val)
+                        return v / 100 if "%" in line or v > 1 else v
                     scores['bcub'] = {
-                        'recall': float(recall_match.group(1)) / 100,
-                        'precision': float(precision_match.group(1)) / 100,
-                        'f1': float(f1_match.group(1)) / 100
+                        'recall': conv(recall_match.group(1)),
+                        'precision': conv(precision_match.group(1)),
+                        'f1': conv(f1_match.group(1))
                     }
                     print(f"PARSED B-CUBED (Coreference): R={scores['bcub']['recall']}, P={scores['bcub']['precision']}, F1={scores['bcub']['f1']}")
             
             # Parse Non-coreference links (additional metric)
             elif "Non-coreference links:" in line:
                 # Format: "Non-coreference links: Recall: (3200 / 3200) 100% Precision: (3200 / 3200) 100%   F1: 100%"
-                recall_match = re.search(r'Recall:\s*\([^)]+\)\s*([\d.]+)%', line)
-                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%', line)
-                f1_match = re.search(r'F1:\s*([\d.]+)%', line)
+                recall_match = re.search(r'Recall:\s*\([^)]+\)\s*([\d.]+)%?', line)
+                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%?', line)
+                f1_match = re.search(r'F1:\s*([\d.]+)%?', line)
                 
                 if recall_match and precision_match and f1_match:
+                    def conv(val):
+                        v = float(val)
+                        return v / 100 if "%" in line or v > 1 else v
                     scores['ceafm'] = {
-                        'recall': float(recall_match.group(1)) / 100,
-                        'precision': float(precision_match.group(1)) / 100,
-                        'f1': float(f1_match.group(1)) / 100
+                        'recall': conv(recall_match.group(1)),
+                        'precision': conv(precision_match.group(1)),
+                        'f1': conv(f1_match.group(1))
                     }
                     print(f"PARSED CEAF-M (Non-coreference): R={scores['ceafm']['recall']}, P={scores['ceafm']['precision']}, F1={scores['ceafm']['f1']}")
             
             # Parse BLANC
             elif "BLANC:" in line:
                 # Format: "BLANC: Recall: (1 / 1) 100%       Precision: (1 / 1) 100% F1: 100%"
-                recall_match = re.search(r'Recall:\s*\([^)]+\)\s*([\d.]+)%', line)
-                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%', line)
-                f1_match = re.search(r'F1:\s*([\d.]+)%', line)
+                recall_match = re.search(r'Recall:\s*\([^)]+\)\s*([\d.]+)%?', line)
+                precision_match = re.search(r'Precision:\s*\([^)]+\)\s*([\d.]+)%?', line)
+                f1_match = re.search(r'F1:\s*([\d.]+)%?', line)
                 
                 if recall_match and precision_match and f1_match:
+                    def conv(val):
+                        v = float(val)
+                        return v / 100 if "%" in line or v > 1 else v
                     scores['blanc'] = {
-                        'recall': float(recall_match.group(1)) / 100,
-                        'precision': float(precision_match.group(1)) / 100,
-                        'f1': float(f1_match.group(1)) / 100
+                        'recall': conv(recall_match.group(1)),
+                        'precision': conv(precision_match.group(1)),
+                        'f1': conv(f1_match.group(1))
                     }
                     print(f"PARSED BLANC: R={scores['blanc']['recall']}, P={scores['blanc']['precision']}, F1={scores['blanc']['f1']}")
             
@@ -497,8 +630,29 @@ def generate_demo_scores() -> dict:
     
     return scores
 
+def normalize_scores_for_storage(scores: dict) -> dict:
+    """Map generic scores to storage-friendly keys (reuses coref columns)."""
+    mapped = {**scores}
+    micro = scores.get('micro')
+    if micro:
+        mapped.setdefault('muc', {})
+        mapped['muc']['precision'] = micro.get('precision')
+        mapped['muc']['recall'] = micro.get('recall')
+        mapped['muc']['f1'] = micro.get('f1')
+        mapped.setdefault('blanc', {})
+        mapped['blanc']['f1'] = micro.get('accuracy')
+        # Also carry micro for downstream consumers
+        mapped['micro'] = {
+            'precision': micro.get('precision'),
+            'recall': micro.get('recall'),
+            'f1': micro.get('f1'),
+            'accuracy': micro.get('accuracy'),
+        }
+    return mapped
+
 def save_evaluation_results(user_id: int, language_id: int, filename: str, file_path: str, scores: dict):
     """Save evaluation results to database or demo storage"""
+    scores = normalize_scores_for_storage(scores)
     conn = get_db_connection()
     
     if conn:
@@ -537,6 +691,7 @@ def save_evaluation_results(user_id: int, language_id: int, filename: str, file_
 def save_to_demo_evaluations(user_id: int, language_id: int, filename: str, file_path: str, scores: dict):
     """Save evaluation to demo storage"""
     language_name = next((lang['language_name'] for lang in DEMO_LANGUAGES if lang['id'] == language_id), 'Unknown')
+    language_task = next((lang.get('task') for lang in DEMO_LANGUAGES if lang['id'] == language_id), None)
     user_team = next((user['team_name'] for user in DEMO_USERS.values() if user['id'] == user_id), None)
     
     evaluation = {
@@ -544,15 +699,24 @@ def save_to_demo_evaluations(user_id: int, language_id: int, filename: str, file
         'user_id': user_id,
         'language_id': language_id,
         'language_name': language_name,
+        'task': language_task,
         'team_name': user_team,
         'uploaded_filename': filename,
         'file_path': file_path,
         'formatted_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'muc_f1': scores.get('muc', {}).get('f1'),
+        'muc_precision': scores.get('muc', {}).get('precision'),
+        'muc_recall': scores.get('muc', {}).get('recall'),
         'bcub_f1': scores.get('bcub', {}).get('f1'),
+        'bcub_precision': scores.get('bcub', {}).get('precision'),
+        'bcub_recall': scores.get('bcub', {}).get('recall'),
         'ceafm_f1': scores.get('ceafm', {}).get('f1'),
         'ceafe_f1': scores.get('ceafe', {}).get('f1'),
         'blanc_f1': scores.get('blanc', {}).get('f1'),
+        'micro_precision': scores.get('micro', {}).get('precision'),
+        'micro_recall': scores.get('micro', {}).get('recall'),
+        'micro_f1': scores.get('micro', {}).get('f1'),
+        'micro_accuracy': scores.get('micro', {}).get('accuracy'),
         'created_at': datetime.now()
     }
     
@@ -567,7 +731,7 @@ def get_user_evaluation_history(user_id: int):
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("""
-                SELECT ue.*, l.language_name, u.team_name, ue.created_at as formatted_date
+                SELECT ue.*, l.language_name, l.task as task, u.team_name, ue.created_at as formatted_date
                 FROM user_evaluations ue
                 JOIN languages l ON ue.language_id = l.id
                 JOIN users u ON ue.user_id = u.id
@@ -581,6 +745,12 @@ def get_user_evaluation_history(user_id: int):
             for record in history:
                 if record['formatted_date']:
                     record['formatted_date'] = record['formatted_date'].strftime('%Y-%m-%d %H:%M:%S')
+                task_name = (record.get('task') or "").lower()
+                if 'pos' in task_name or 'chunk' in task_name:
+                    record['micro_precision'] = record.get('muc_precision')
+                    record['micro_recall'] = record.get('muc_recall')
+                    record['micro_f1'] = record.get('muc_f1')
+                    record['micro_accuracy'] = record.get('blanc_f1')
             
             conn.close()
             print(f"SUCCESS: Retrieved {len(history)} evaluation records from database")
@@ -598,6 +768,15 @@ def get_user_evaluation_history(user_id: int):
         if not record.get('team_name'):
             user_data = next((u for u in DEMO_USERS.values() if u['id'] == user_id), {})
             record['team_name'] = user_data.get('team_name')
+        if not record.get('task'):
+            language = next((lang for lang in DEMO_LANGUAGES if lang['id'] == record.get('language_id')), {})
+            record['task'] = language.get('task')
+        task_name = (record.get('task') or "").lower()
+        if 'pos' in task_name or 'chunk' in task_name:
+            record['micro_precision'] = record.get('micro_precision') or record.get('muc_precision')
+            record['micro_recall'] = record.get('micro_recall') or record.get('muc_recall')
+            record['micro_f1'] = record.get('micro_f1') or record.get('muc_f1')
+            record['micro_accuracy'] = record.get('micro_accuracy') or record.get('blanc_f1')
         enriched_history.append(record)
     
     enriched_history.sort(key=lambda x: x['created_at'], reverse=True)
@@ -674,6 +853,7 @@ def get_language_leaderboards():
                     'language_id': language['id'],
                     'language_name': language['language_name'],
                     'language_code': language['language_code'],
+                    'task': language.get('task', 'Coreference'),
                     'top_scores': []
                 }
                 
@@ -685,16 +865,16 @@ def get_language_leaderboards():
                              COALESCE(ue.ceafm_f1, 0) + COALESCE(ue.blanc_f1, 0)) / 4) as avg_f1
                     FROM user_evaluations ue
                     JOIN users u ON ue.user_id = u.id
-                    JOIN gold_datasets gd ON ue.language_id = gd.language_id
+                    JOIN gold_datasets gd ON ue.language_id = gd.language_id AND (gd.task = %s OR gd.task IS NULL)
                     WHERE ue.language_id = %s
                     AND u.is_active = 1
                     AND gd.is_deleted = 0
                     AND gd.version = (
                         SELECT MAX(version) FROM gold_datasets 
-                        WHERE language_id = %s AND is_deleted = 0
+                        WHERE language_id = %s AND is_deleted = 0 AND (task = %s OR task IS NULL)
                     )
                     ORDER BY avg_f1 DESC
-                """, (language['id'], language['id']))
+                """, (language.get('task', 'Coreference'), language['id'], language['id'], language.get('task', 'Coreference')))
                 
                 top_scores = cursor.fetchall()
                 
@@ -754,6 +934,7 @@ def get_demo_leaderboards():
             'language_id': language['id'],
             'language_name': language['language_name'],
             'language_code': language['language_code'],
+            'task': language.get('task', 'Coreference'),
             'top_scores': []
         }
         
@@ -776,10 +957,11 @@ def get_demo_leaderboards():
         # Sort by average F1 score (calculate from available metrics)
         for eval in language_evaluations:
             scores = []
-            if eval.get('muc_f1'): scores.append(float(eval['muc_f1']))
-            if eval.get('bcub_f1'): scores.append(float(eval['bcub_f1']))
-            if eval.get('ceafm_f1'): scores.append(float(eval['ceafm_f1']))
-            if eval.get('blanc_f1'): scores.append(float(eval['blanc_f1']))
+            if eval.get('muc_f1') is not None: scores.append(float(eval['muc_f1']))
+            if eval.get('bcub_f1') is not None: scores.append(float(eval['bcub_f1']))
+            if eval.get('ceafm_f1') is not None: scores.append(float(eval['ceafm_f1']))
+            if eval.get('blanc_f1') is not None: scores.append(float(eval['blanc_f1']))
+            if eval.get('micro_f1') is not None: scores.append(float(eval['micro_f1']))
             
             eval['avg_f1'] = sum(scores) / len(scores) if scores else 0
             
@@ -953,10 +1135,13 @@ async def login(request: Request, username: str = Form(default=""), password: st
 
 @app.get("/logout", name="logout")
 async def logout(request: Request, session_token: str = Cookie(None)):
+    session_user = get_session_user(session_token)
     # Clear the session from server-side storage
     if session_token and session_token in active_sessions:
         del active_sessions[session_token]
         print(f"SUCCESS: Session cleared for token: {session_token[:20]}...")
+    if session_user:
+        log_activity(session_user['id'], 'logout')
     
     response = RedirectResponse(url=request.url_for("homepage"), status_code=302)
     
@@ -976,34 +1161,121 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
         return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
     
     # Get languages from database
+    task_suggestions = []
+    client_languages = []
     conn = get_db_connection()
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM languages ORDER BY language_name")
-            languages = cursor.fetchall()
+            cursor.execute("""
+                SELECT DISTINCT 
+                    l.id,
+                    l.language_code,
+                    l.language_name,
+                    l.task as lang_task,
+                    gd.task as dataset_task
+                FROM languages l
+                JOIN gold_datasets gd 
+                    ON gd.language_id = l.id 
+                    AND gd.is_deleted = FALSE
+                WHERE l.is_deleted = FALSE
+                ORDER BY l.language_name
+            """)
+            rows = cursor.fetchall()
+            languages = []
+            seen = set()
+            for row in rows:
+                task_val = row.get('dataset_task') or row.get('lang_task') or 'Coreference'
+                key = (row['id'], task_val)
+                if key in seen:
+                    continue
+                seen.add(key)
+                lang_entry = {
+                    'id': row['id'],
+                    'language_code': row['language_code'],
+                    'language_name': row['language_name'],
+                    'task': task_val
+                }
+                client_languages.append(lang_entry)
+                languages.append(lang_entry)  # reuse for tojson if needed elsewhere
+                if task_val and task_val not in task_suggestions:
+                    task_suggestions.append(task_val)
             conn.close()
         except Exception as e:
             print(f"Database error getting languages: {e}")
             languages = DEMO_LANGUAGES
+            client_languages = []
+            seen = set()
+            for lang in DEMO_LANGUAGES:
+                if lang.get('is_deleted'):
+                    continue
+                # Only include languages that have a dataset for this task
+                for ds in DEMO_GOLD_DATASETS:
+                    if ds.get('is_deleted'):
+                        continue
+                    if ds.get('language_id') == lang['id']:
+                        task_val = ds.get('task') or lang.get('task') or 'Coreference'
+                        key = (lang['id'], task_val)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        entry = {
+                            'id': lang['id'],
+                            'language_code': lang['language_code'],
+                            'language_name': lang['language_name'],
+                            'task': task_val
+                        }
+                        client_languages.append(entry)
+                        if task_val and task_val not in task_suggestions:
+                            task_suggestions.append(task_val)
             if conn:
                 conn.close()
     else:
         languages = DEMO_LANGUAGES
+        client_languages = []
+        seen = set()
+        for lang in DEMO_LANGUAGES:
+            if lang.get('is_deleted'):
+                continue
+            for ds in DEMO_GOLD_DATASETS:
+                if ds.get('is_deleted'):
+                    continue
+                if ds.get('language_id') == lang['id']:
+                    task_val = ds.get('task') or lang.get('task') or 'Coreference'
+                    key = (lang['id'], task_val)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    entry = {
+                        'id': lang['id'],
+                        'language_code': lang['language_code'],
+                        'language_name': lang['language_name'],
+                        'task': task_val
+                    }
+                    client_languages.append(entry)
+                    if task_val and task_val not in task_suggestions:
+                        task_suggestions.append(task_val)
     
     # Get user's evaluation history
     history = get_user_evaluation_history(user['id'])
+    history_by_task = {}
+    for record in history:
+        task_name = record.get('task') or 'Coreference'
+        history_by_task.setdefault(task_name, []).append(record)
     
     return templates.TemplateResponse("client_dashboard.html", {
         "request": request,
         "user": user,
-        "languages": languages,
-        "history": history
+        "languages": client_languages,
+        "task_suggestions": sorted(set(task_suggestions)),
+        "history": history,
+        "history_by_task": history_by_task
     })
 
 @app.post("/evaluate")
 async def evaluate_file(
     request: Request,
+    task: str = Form(None),
     language_id: int = Form(...),
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
@@ -1014,10 +1286,11 @@ async def evaluate_file(
     print(f"STARTING EVALUATION: User {user['username']}, Language ID {language_id}, File {file.filename}")
     
     try:
+        task_normalized = normalize_task(task) if task else "Coreference"
         # Find gold dataset for the language
-        gold_dataset = find_gold_dataset(language_id)
+        gold_dataset = find_gold_dataset(language_id, task_normalized)
         if not gold_dataset:
-            raise HTTPException(status_code=400, detail=f"No gold dataset found for language ID {language_id}. Please upload a gold dataset first.")
+            raise HTTPException(status_code=400, detail=f"No gold dataset found for language ID {language_id} and task '{task}'. Please upload a gold dataset first.")
         
         print(f"FOUND GOLD DATASET: {gold_dataset['filename']} at {gold_dataset['file_path']}")
         
@@ -1040,8 +1313,14 @@ async def evaluate_file(
             print(f"ERROR: User file not found: {upload_path}")
             raise HTTPException(status_code=400, detail="User file not found")
         
-        # Run evaluation with actual Perl script
-        scores = run_perl_scorer(gold_dataset['file_path'], str(upload_path))
+        # Choose scorer based on task
+        task_lower = task_normalized.lower()
+        if 'pos' in task_lower:
+            scores = run_python_scorer(Path("scorer") / "eval.py", gold_dataset['file_path'], str(upload_path))
+        elif 'chunk' in task_lower:
+            scores = run_python_scorer(Path("scorer") / "eval-chunker.py", gold_dataset['file_path'], str(upload_path))
+        else:
+            scores = run_perl_scorer(gold_dataset['file_path'], str(upload_path))
         
         # Save results to database/demo storage
         save_evaluation_results(user['id'], language_id, file.filename, str(upload_path), scores)
@@ -1063,59 +1342,71 @@ async def add_language(
     request: Request,
     language_code: str = Form(...),
     language_name: str = Form(...),
+    task: str = Form(...),
     user: dict = Depends(get_current_user)
 ):
-    # Check if user is admin
-    is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    # Validate language code (basic validation)
-    language_code = language_code.strip().lower()
-    language_name = language_name.strip()
-    
-    if not language_code or not language_name:
-        raise HTTPException(status_code=400, detail="Language code and name are required")
-    
-    if len(language_code) > 10:
-        raise HTTPException(status_code=400, detail="Language code must be 10 characters or less")
-    
-    # Check if language code already exists
-    conn = get_db_connection()
-    if conn:
-        try:
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT id FROM languages WHERE language_code = %s", (language_code,))
-            existing = cursor.fetchone()
-            
-            if existing:
+    try:
+        # Check if user is admin
+        is_admin = user.get('is_admin', False) or user.get('username') == 'admin'
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Validate language code (basic validation)
+        language_code = language_code.strip().lower()
+        language_name = language_name.strip()
+        task = normalize_task(task)
+        
+        if not language_code or not language_name:
+            raise HTTPException(status_code=400, detail="Language code and name are required")
+        
+        if len(language_code) > 10:
+            raise HTTPException(status_code=400, detail="Language code must be 10 characters or less")
+        
+        # Check if language code already exists
+        conn = get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id FROM languages WHERE language_code = %s AND task = %s AND is_deleted = FALSE",
+                    (language_code, task)
+                )
+                existing = cursor.fetchone()
+                
+                if existing:
+                    conn.close()
+                    raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists for task '{task}'")
+                
+                # Insert new language
+                cursor.execute(
+                    "INSERT INTO languages (language_code, language_name, task) VALUES (%s, %s, %s)",
+                    (language_code, language_name, task)
+                )
+                conn.commit()
                 conn.close()
-                raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists")
-            
-            # Insert new language
-            cursor.execute(
-                "INSERT INTO languages (language_code, language_name) VALUES (%s, %s)",
-                (language_code, language_name)
-            )
-            conn.commit()
-            conn.close()
-            print(f"SUCCESS: Language {language_name} ({language_code}) added to database")
-            
-            # Log activity
+                print(f"SUCCESS: Language {language_name} ({language_code}) added to database")
+                
+                # Log activity
+                log_activity(user['id'], 'language_added')
+            except HTTPException as e:
+                # Send back to languages tab with error message
+                return redirect_to_admin(tab="languages", lang_error=str(e.detail))
+            except Exception as e:
+                print(f"ERROR adding language to database: {e}")
+                if conn:
+                    conn.close()
+                # Fallback to demo storage
+                add_to_demo_languages(language_code, language_name, task)
+                log_activity(user['id'], 'language_added')
+        else:
+            # Add to demo storage
+            add_to_demo_languages(language_code, language_name, task)
             log_activity(user['id'], 'language_added')
-        except HTTPException:
-            raise
-        except Exception as e:
-            print(f"ERROR adding language to database: {e}")
-            if conn:
-                conn.close()
-            # Fallback to demo storage
-            add_to_demo_languages(language_code, language_name)
-    else:
-        # Add to demo storage
-        add_to_demo_languages(language_code, language_name)
 
-    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+        return redirect_to_admin(tab="languages")
+    except HTTPException as e:
+        # Catch any validation/duplicate errors and surface on the languages tab
+        return redirect_to_admin(tab="languages", lang_error=str(e.detail))
 
 @app.post("/admin/update_language/{language_id}")
 async def update_language(
@@ -1123,6 +1414,7 @@ async def update_language(
     language_id: int,
     language_code: str = Form(...),
     language_name: str = Form(...),
+    task: str = Form(...),
     user: dict = Depends(get_current_user)
 ):
     if user['username'] != 'admin':
@@ -1131,6 +1423,7 @@ async def update_language(
     # Validate input
     language_code = language_code.strip().lower()
     language_name = language_name.strip()
+    task = normalize_task(task)
     
     if not language_code or not language_name:
         raise HTTPException(status_code=400, detail="Language code and name are required")
@@ -1144,21 +1437,25 @@ async def update_language(
             cursor = conn.cursor(dictionary=True)
             
             # Check if language code already exists for different language
-            cursor.execute("SELECT id FROM languages WHERE language_code = %s AND id != %s", (language_code, language_id))
+            cursor.execute(
+                "SELECT id FROM languages WHERE language_code = %s AND task = %s AND id != %s AND is_deleted = FALSE",
+                (language_code, task, language_id)
+            )
             existing = cursor.fetchone()
             
             if existing:
                 conn.close()
-                raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists")
+                raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists for task '{task}'")
             
             # Update language
             cursor.execute(
-                "UPDATE languages SET language_code = %s, language_name = %s WHERE id = %s",
-                (language_code, language_name, language_id)
+                "UPDATE languages SET language_code = %s, language_name = %s, task = %s WHERE id = %s",
+                (language_code, language_name, task, language_id)
             )
             conn.commit()
             conn.close()
             print(f"SUCCESS: Language updated to {language_name} ({language_code})")
+            log_activity(user['id'], 'language_updated', language_id)
         except HTTPException:
             raise
         except Exception as e:
@@ -1166,12 +1463,13 @@ async def update_language(
             if conn:
                 conn.close()
             # Fallback to demo storage
-            update_demo_language(language_id, language_code, language_name)
+            update_demo_language(language_id, language_code, language_name, task)
+            log_activity(user['id'], 'language_updated', language_id)
     else:
         # Update demo storage
-        update_demo_language(language_id, language_code, language_name)
-
-    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+        update_demo_language(language_id, language_code, language_name, task)
+        log_activity(user['id'], 'language_updated', language_id)
+    return redirect_to_admin(tab="languages")
 
 @app.post("/admin/delete_language/{language_id}",name="delete_language")
 async def delete_language(
@@ -1225,46 +1523,55 @@ async def delete_language(
                 conn.close()
             # Fallback to demo storage
             delete_from_demo_languages(language_id)
+            log_activity(user['id'], 'language_deleted', language_id)
     else:
         # Delete from demo storage
         delete_from_demo_languages(language_id)
+        log_activity(user['id'], 'language_deleted', language_id)
 
-    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+    return redirect_to_admin(tab="languages")
 
 # Helper functions for demo language management
-def add_to_demo_languages(language_code: str, language_name: str):
+def add_to_demo_languages(language_code: str, language_name: str, task: str):
     """Add language to demo storage"""
     global DEMO_LANGUAGES
     
     # Check if code already exists
     for lang in DEMO_LANGUAGES:
-        if lang['language_code'] == language_code:
-            raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists")
+        if lang['language_code'] == language_code and lang.get('task', 'Coreference') == task and not lang.get('is_deleted'):
+            raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists for task '{task}'")
     
     new_id = max([lang['id'] for lang in DEMO_LANGUAGES], default=0) + 1
     new_language = {
         'id': new_id,
         'language_code': language_code,
-        'language_name': language_name
+        'language_name': language_name,
+        'task': task
     }
     
     DEMO_LANGUAGES.append(new_language)
     print(f"SUCCESS: Language {language_name} ({language_code}) added to demo storage")
 
-def update_demo_language(language_id: int, language_code: str, language_name: str):
+def update_demo_language(language_id: int, language_code: str, language_name: str, task: str):
     """Update language in demo storage"""
     global DEMO_LANGUAGES
     
     # Check if code already exists for different language
     for lang in DEMO_LANGUAGES:
-        if lang['language_code'] == language_code and lang['id'] != language_id:
-            raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists")
+        if (
+            lang['language_code'] == language_code
+            and lang.get('task', 'Coreference') == task
+            and lang['id'] != language_id
+            and not lang.get('is_deleted')
+        ):
+            raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists for task '{task}'")
     
     # Find and update the language
     for i, lang in enumerate(DEMO_LANGUAGES):
         if lang['id'] == language_id:
             DEMO_LANGUAGES[i]['language_code'] = language_code
             DEMO_LANGUAGES[i]['language_name'] = language_name
+            DEMO_LANGUAGES[i]['task'] = task
             print(f"SUCCESS: Language updated to {language_name} ({language_code}) in demo storage")
             return
     
@@ -1292,6 +1599,38 @@ def delete_from_demo_languages(language_id: int):
     
     print(f"SUCCESS: Language marked as deleted from demo storage")
 
+def build_task_suggestions(languages: list, fallback_languages: list) -> list:
+    """Return a sorted list of task suggestions from active languages plus defaults."""
+    tasks = set()
+    source = languages if languages else fallback_languages
+    for lang in source:
+        if lang.get('is_deleted'):
+            continue
+        task = lang.get('task')
+        if task:
+            tasks.add(task)
+    for default_task in DEFAULT_TASK_SUGGESTIONS:
+        tasks.add(default_task)
+    return sorted(tasks)
+
+def make_json_safe(records: list) -> list:
+    """Return a version of the records list that is safe to JSON encode (datetime -> string)."""
+    safe_records = []
+    for record in records or []:
+        if isinstance(record, dict):
+            converted = {}
+            for key, value in record.items():
+                if isinstance(value, (datetime, timedelta)):
+                    converted[key] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    converted[key] = float(value)
+                else:
+                    converted[key] = value
+            safe_records.append(converted)
+        else:
+            safe_records.append(record)
+    return safe_records
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, user: dict = Depends(get_current_user)):
     # Check if user is admin using is_admin flag or username
@@ -1312,14 +1651,15 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
             'created_at': 'Demo'
         }
         for info in DEMO_USERS.values()
-        if info.get('is_active', True) and not info.get('is_admin') and info.get('username') != 'admin'
     ]
     demo_languages = [lang for lang in DEMO_LANGUAGES if not lang.get('is_deleted')]
     demo_gold_datasets = [ds for ds in DEMO_GOLD_DATASETS if not ds.get('is_deleted')]
     demo_recent_activities = []
     for activity in DEMO_ACTIVITY_LOGS:
-        if activity.get('is_admin') or activity.get('username') == 'admin':
-            continue
+        if not activity.get('language_task') and activity.get('language_id'):
+            lang_obj = next((lang for lang in demo_languages if lang['id'] == activity.get('language_id')), None)
+            if lang_obj:
+                activity['language_task'] = lang_obj.get('task')
         display_name = activity.get('username', 'Unknown')
         team_name = activity.get('team_name')
         if team_name:
@@ -1341,11 +1681,10 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
         try:
             cursor = conn.cursor(dictionary=True)
             
-            # Get all active users
+            # Get all users (active and inactive)
             cursor.execute("""
                 SELECT id, username, email, is_active, team_name, is_admin, created_at
                 FROM users 
-                WHERE is_active = 1 AND (is_admin = 0 OR is_admin IS NULL) AND username != 'admin'
                 ORDER BY created_at DESC
             """)
             users = cursor.fetchall()
@@ -1356,7 +1695,7 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
             
             # Get gold datasets (only non-deleted)
             cursor.execute("""
-                SELECT gd.*, l.language_name 
+                SELECT gd.*, l.language_name, l.task as language_task
                 FROM gold_datasets gd 
                 JOIN languages l ON gd.language_id = l.id 
                 WHERE gd.is_deleted = FALSE AND l.is_deleted = FALSE
@@ -1366,10 +1705,10 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
             
             # Get recent activity logs (last 20)
             cursor.execute("""
-                SELECT al.*, u.username, u.team_name, u.is_admin
+                SELECT al.*, u.username, u.team_name, u.is_admin, l.task as language_task, l.language_name
                 FROM activity_logs al
                 JOIN users u ON al.user_id = u.id
-                WHERE (u.is_admin = 0 OR u.is_admin IS NULL) AND u.username != 'admin'
+                LEFT JOIN languages l ON al.language_id = l.id
                 ORDER BY al.created_at DESC
                 LIMIT 20
             """)
@@ -1381,6 +1720,8 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
                     activity['formatted_date'] = activity['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                 else:
                     activity['formatted_date'] = str(activity.get('created_at', 'N/A'))
+                if not activity.get('language_used') and activity.get('language_name'):
+                    activity['language_used'] = activity.get('language_name')
                 display_name = activity.get('username', 'Unknown')
                 if activity.get('team_name'):
                     display_name = f"{display_name} ({activity['team_name']})"
@@ -1403,14 +1744,45 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
         languages = demo_languages
         gold_datasets = demo_gold_datasets
         recent_activities = demo_recent_activities
-    
+
+    # Enrich demo gold_datasets with task when using demo or when DB missing
+    if gold_datasets:
+        lang_task_map = {lang['id']: lang.get('task') for lang in languages}
+        for ds in gold_datasets:
+            if not ds.get('language_task'):
+                ds['language_task'] = lang_task_map.get(ds.get('language_id'))
+
+    task_suggestions = build_task_suggestions(languages, demo_languages)
+    # Stats: distinct tasks and distinct language codes (ignoring task)
+    source_langs = languages if languages else demo_languages
+    unique_tasks = set()
+    unique_codes = set()
+    for lang in source_langs:
+        if lang.get('is_deleted'):
+            continue
+        code = lang.get('language_code')
+        task = lang.get('task')
+        if code:
+            unique_codes.add(code.lower())
+        if task:
+            unique_tasks.add(task)
+    tasks_count = len(unique_tasks) if unique_tasks else len(task_suggestions)
+    languages_unique_count = len(unique_codes)
+    languages_json = make_json_safe(languages)
+    gold_datasets_json = make_json_safe(gold_datasets)
+
     return templates.TemplateResponse("admin_dashboard.html", {
         "request": request,
         "users": users,
         "languages": languages,
+        "languages_json": languages_json,
         "gold_datasets": gold_datasets,
+        "gold_datasets_json": gold_datasets_json,
         "recent_activities": recent_activities,
-        "scorer_exists": False  # Removed scorer functionality
+        "scorer_exists": False,  # Removed scorer functionality
+        "task_suggestions": task_suggestions,
+        "tasks_count": tasks_count,
+        "languages_unique_count": languages_unique_count
     })
 
 @app.post("/admin/add_user", name="add_user")
@@ -1425,6 +1797,20 @@ async def add_user(
 ):
     if not (user.get('is_admin', False) or user.get('username') == 'admin'):
         raise HTTPException(status_code=403, detail="Admin access required")
+
+    username_clean = (username or "").strip()
+    email_clean = (email or "").strip()
+    if not username_clean or not email_clean:
+        return redirect_to_admin(tab="users", user_error="Username and email are required.")
+
+    # Duplicate checks for demo mode
+    for demo_user in DEMO_USERS.values():
+        if not demo_user.get('is_active', True):
+            continue
+        if demo_user.get('username') == username_clean:
+            return redirect_to_admin(tab="users", user_error="Username already exists.")
+        if demo_user.get('email') == email_clean:
+            return redirect_to_admin(tab="users", user_error="Email already exists.")
     
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     
@@ -1436,14 +1822,26 @@ async def add_user(
     conn = get_db_connection()
     if conn:
         try:
+            cursor = conn.cursor(dictionary=True)
+            # Duplicate checks in database
+            cursor.execute("SELECT id FROM users WHERE username = %s AND is_active = 1", (username_clean,))
+            if cursor.fetchone():
+                conn.close()
+                return redirect_to_admin(tab="users", user_error="Username already exists.")
+            cursor.execute("SELECT id FROM users WHERE email = %s AND is_active = 1", (email_clean,))
+            if cursor.fetchone():
+                conn.close()
+                return redirect_to_admin(tab="users", user_error="Email already exists.")
+
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO users (username, email, password_hash, is_active, team_name, is_admin) VALUES (%s, %s, %s, %s, %s, %s)",
-                (username, email, password_hash, True, team_name, is_admin)
+                (username_clean, email_clean, password_hash, True, team_name, is_admin)
             )
             conn.commit()
             conn.close()
-            print(f"SUCCESS: User {username} added to database (Admin: {is_admin})")
+            print(f"SUCCESS: User {username_clean} added to database (Admin: {is_admin})")
+            log_activity(user['id'], 'user_added')
         except Exception as e:
             print(f"ERROR adding user to database: {e}")
             if conn:
@@ -1451,28 +1849,128 @@ async def add_user(
             # Fallback to demo users
             DEMO_USERS[username] = {
                 'id': len(DEMO_USERS) + 1,
-                'username': username,
+                'username': username_clean,
                 'password_hash': password_hash,
-                'email': email,
+                'email': email_clean,
                 'is_active': True,
                 'team_name': team_name,
                 'is_admin': is_admin
             }
-            print(f"SUCCESS: User {username} added to demo storage (Admin: {is_admin})")
+            print(f"SUCCESS: User {username_clean} added to demo storage (Admin: {is_admin})")
+            log_activity(user['id'], 'user_added')
     else:
         # Add to demo users
         DEMO_USERS[username] = {
             'id': len(DEMO_USERS) + 1,
-            'username': username,
+            'username': username_clean,
             'password_hash': password_hash,
-            'email': email,
+            'email': email_clean,
             'is_active': True,
             'team_name': team_name,
             'is_admin': is_admin
         }
-        print(f"SUCCESS: User {username} added to demo storage (Admin: {is_admin})")
+        print(f"SUCCESS: User {username_clean} added to demo storage (Admin: {is_admin})")
+        log_activity(user['id'], 'user_added')
     
-    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+    return redirect_to_admin()
+
+@app.post("/admin/update_user/{user_id}", name="update_user")
+async def update_user(
+    request: Request,
+    user_id: int,
+    username: str = Form(...),
+    email: str = Form(...),
+    is_active: str = Form("false"),
+    user: dict = Depends(get_current_user)
+):
+    if not (user.get('is_admin', False) or user.get('username') == 'admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    username_clean = (username or "").strip()
+    email_clean = (email or "").strip()
+    active_flag = str(is_active).lower() in ("true", "1", "yes", "on")
+
+    if not username_clean or not email_clean:
+        return redirect_to_admin(tab="users", user_error="Username and email are required.")
+
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+            target_user = cursor.fetchone()
+            if not target_user:
+                conn.close()
+                return redirect_to_admin(tab="users", user_error="User not found.")
+
+            if target_user.get('username') == 'admin' and not active_flag:
+                conn.close()
+                return redirect_to_admin(tab="users", user_error="Primary admin cannot be deactivated.")
+
+            cursor.execute(
+                "SELECT id FROM users WHERE username = %s AND id != %s AND is_active = 1",
+                (username_clean, user_id)
+            )
+            if cursor.fetchone():
+                conn.close()
+                return redirect_to_admin(tab="users", user_error="Username already exists.")
+
+            cursor.execute(
+                "SELECT id FROM users WHERE email = %s AND id != %s AND is_active = 1",
+                (email_clean, user_id)
+            )
+            if cursor.fetchone():
+                conn.close()
+                return redirect_to_admin(tab="users", user_error="Email already exists.")
+
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE users SET username = %s, email = %s, is_active = %s WHERE id = %s",
+                (username_clean, email_clean, active_flag, user_id)
+            )
+            conn.commit()
+            conn.close()
+            print(f"SUCCESS: User {user_id} updated (username: {username_clean})")
+            log_activity(user['id'], 'user_updated', details=f"target_id={user_id}")
+            return redirect_to_admin(tab="users")
+        except Exception as e:
+            print(f"ERROR updating user in database: {e}")
+            if conn:
+                conn.close()
+            # Fall through to demo update
+    # Demo duplicate checks
+    for info in DEMO_USERS.values():
+        if info.get('id') == user_id:
+            continue
+        if not info.get('is_active', True):
+            continue
+        if info.get('username') == username_clean:
+            return redirect_to_admin(tab="users", user_error="Username already exists.")
+        if info.get('email') == email_clean:
+            return redirect_to_admin(tab="users", user_error="Email already exists.")
+
+    # Demo update fallback
+    updated = False
+    for existing_username, info in list(DEMO_USERS.items()):
+        if info.get('id') == user_id:
+            if existing_username == 'admin' and not active_flag:
+                return redirect_to_admin(tab="users", user_error="Primary admin cannot be deactivated.")
+            info['username'] = username_clean
+            info['email'] = email_clean
+            info['is_active'] = active_flag
+            if existing_username != username_clean:
+                # maintain dict keyed by username
+                DEMO_USERS.pop(existing_username, None)
+                DEMO_USERS[username_clean] = info
+            updated = True
+            print(f"DEMO: User {user_id} updated (username: {username_clean})")
+            log_activity(user['id'], 'user_updated', details=f"target_id={user_id}")
+            break
+
+    if not updated:
+        return redirect_to_admin(tab="users", user_error="User not found.")
+
+    return redirect_to_admin(tab="users")
 
 @app.post("/admin/delete_user/{user_id}", name="delete_user")
 async def delete_user(
@@ -1487,43 +1985,63 @@ async def delete_user(
     
     # Prevent deleting yourself
     if user['id'] == user_id:
-        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+        return redirect_to_admin(tab="users", user_error="Cannot delete your own account.")
     
     conn = get_db_connection()
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
             
-            # Get user info before soft delete
+            # Get user info before hard delete
             cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
             user_to_delete = cursor.fetchone()
             
             if not user_to_delete:
                 conn.close()
-                raise HTTPException(status_code=404, detail="User not found")
+                return redirect_to_admin(tab="users", user_error="User not found.")
+
+            if user_to_delete.get('username') == 'admin':
+                conn.close()
+                return redirect_to_admin(tab="users", user_error="Cannot delete primary admin account.")
             
-            # Soft delete: Mark user as inactive
-            cursor.execute(
-                "UPDATE users SET is_active = 0 WHERE id = %s",
-                (user_id,)
-            )
+            # Hard delete user
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
             
             conn.commit()
             conn.close()
-            print(f"SUCCESS: User '{user_to_delete['username']}' marked as inactive (ID: {user_id})")
+            print(f"SUCCESS: User '{user_to_delete['username']}' deleted (ID: {user_id})")
+            log_activity(user['id'], 'user_deleted', details=f"target_id={user_id}")
         except HTTPException:
             raise
         except Exception as e:
             print(f"ERROR deleting user from database: {e}")
             if conn:
                 conn.close()
+            # Fall through to demo delete
+    # Demo delete fallback
+    demo_deleted = False
+    for existing_username in list(DEMO_USERS.keys()):
+        info = DEMO_USERS[existing_username]
+        if info.get('id') == user_id:
+            if info.get('username') == 'admin':
+                return redirect_to_admin(tab="users", user_error="Cannot delete primary admin account.")
+            DEMO_USERS.pop(existing_username, None)
+            print(f"DEMO: User '{existing_username}' deleted (ID: {user_id})")
+            log_activity(user['id'], 'user_deleted', details=f"target_id={user_id}")
+            demo_deleted = True
+            break
+
+    if not demo_deleted and not conn:
+        return redirect_to_admin(tab="users", user_error="User not found.")
     
-    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+    return redirect_to_admin(tab="users")
 
 @app.post("/admin/upload_gold_dataset",name="upload_gold_dataset")
 async def upload_gold_dataset(
     request: Request,
     language_id: int = Form(...),
+    task: str = Form(None),
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
@@ -1536,6 +2054,8 @@ async def upload_gold_dataset(
         raise HTTPException(status_code=400, detail="Only .txt files allowed")
     
     try:
+        task_normalized = normalize_task(task) if task else "Coreference"
+        
         # Create language-specific directory
         lang_dir = Path("gold_datasets") / f"lang_{language_id}"
         lang_dir.mkdir(exist_ok=True)
@@ -1543,22 +2063,36 @@ async def upload_gold_dataset(
         # Get the next version number for this language
         conn = get_db_connection()
         next_version = 1
+        existing_dataset = False
         
         if conn:
             try:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute(
-                    "SELECT MAX(version) as max_version FROM gold_datasets WHERE language_id = %s AND is_deleted = FALSE",
-                    (language_id,)
-                )
+                if task_normalized:
+                    cursor.execute(
+                        "SELECT MAX(version) as max_version FROM gold_datasets WHERE language_id = %s AND task = %s AND is_deleted = FALSE",
+                        (language_id, task_normalized)
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT MAX(version) as max_version FROM gold_datasets WHERE language_id = %s AND is_deleted = FALSE",
+                        (language_id,)
+                    )
                 result = cursor.fetchone()
-                if result and result['max_version']:
+                if result and result['max_version'] is not None:
+                    existing_dataset = True
                     next_version = int(result['max_version']) + 1
                 conn.close()
             except Exception as e:
                 print(f"Error getting version: {e}")
                 if conn:
                     conn.close()
+            existing_dataset = demo_dataset_exists(language_id, task_normalized)
+        else:
+            existing_dataset = demo_dataset_exists(language_id, task_normalized)
+        
+        if existing_dataset:
+            return redirect_to_admin(tab="datasets", dataset_error="Dataset already exists for this language and task.")
         
         # Save file with timestamp and version
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1576,8 +2110,8 @@ async def upload_gold_dataset(
             try:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO gold_datasets (language_id, filename, file_path, uploaded_by, is_deleted, version) VALUES (%s, %s, %s, %s, %s, %s)",
-                    (language_id, file.filename, str(file_path), user['username'], False, next_version)
+                    "INSERT INTO gold_datasets (language_id, filename, file_path, uploaded_by, is_deleted, version, task) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (language_id, file.filename, str(file_path), user['username'], False, next_version, task_normalized or "Coreference")
                 )
                 conn.commit()
                 conn.close()
@@ -1587,19 +2121,19 @@ async def upload_gold_dataset(
                 if conn:
                     conn.close()
                 # Fallback to demo data
-                add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'], next_version)
+                add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'], next_version, task_normalized)
         else:
             # Save to demo data
-            add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'], next_version)
+            add_to_demo_datasets(language_id, file.filename, str(file_path), user['username'], next_version, task_normalized)
 
         # Log activity
         log_activity(user['id'], 'gold_dataset_uploaded', language_id, file.filename)
         
-        return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+        return redirect_to_admin(tab="datasets")
 
     except Exception as e:
         print(f"ERROR uploading gold dataset: {e}")
-        raise HTTPException(status_code=500, detail=f"Error uploading gold dataset: {str(e)}")
+        return redirect_to_admin(tab="datasets", dataset_error=f"Upload failed: {str(e)}")
 
 @app.post("/admin/delete_gold_dataset/{dataset_id}")
 async def delete_gold_dataset(
@@ -1618,7 +2152,7 @@ async def delete_gold_dataset(
             cursor = conn.cursor(dictionary=True)
             
             # Get the dataset info before marking as deleted
-            cursor.execute("SELECT filename FROM gold_datasets WHERE id = %s", (dataset_id,))
+            cursor.execute("SELECT filename, language_id, task FROM gold_datasets WHERE id = %s", (dataset_id,))
             dataset = cursor.fetchone()
             
             if not dataset:
@@ -1636,6 +2170,7 @@ async def delete_gold_dataset(
             conn.commit()
             conn.close()
             print(f"SUCCESS: Gold dataset '{filename}' marked as deleted (ID: {dataset_id})")
+            log_activity(user['id'], 'gold_dataset_deleted', dataset.get('language_id'), filename)
         except HTTPException:
             raise
         except Exception as e:
@@ -1643,12 +2178,18 @@ async def delete_gold_dataset(
             if conn:
                 conn.close()
             # Fallback to demo storage
+            target_lang = dataset.get('language_id') if dataset else None
             delete_from_demo_datasets(dataset_id)
+            log_activity(user['id'], 'gold_dataset_deleted', target_lang, filename if 'filename' in locals() else None)
     else:
         # Delete from demo storage
+        demo_dataset = next((ds for ds in DEMO_GOLD_DATASETS if ds.get('id') == dataset_id), None)
+        target_lang = demo_dataset.get('language_id') if demo_dataset else None
+        filename = demo_dataset.get('filename') if demo_dataset else None
         delete_from_demo_datasets(dataset_id)
+        log_activity(user['id'], 'gold_dataset_deleted', target_lang, filename)
 
-    return RedirectResponse(url=request.url_for("admin_dashboard"), status_code=302)
+    return redirect_to_admin(tab="datasets")
 
 def delete_from_demo_datasets(dataset_id: int):
     """Soft delete gold dataset from demo storage"""
@@ -1668,14 +2209,18 @@ def delete_from_demo_datasets(dataset_id: int):
     
     print(f"SUCCESS: Gold dataset marked as deleted from demo storage (ID: {dataset_id})")
 
-def add_to_demo_datasets(language_id: int, filename: str, file_path: str, uploaded_by: str, version: int = 1):
+def add_to_demo_datasets(language_id: int, filename: str, file_path: str, uploaded_by: str, version: int = 1, task: str = None):
     """Add gold dataset to demo data"""
-    language_name = next((lang['language_name'] for lang in DEMO_LANGUAGES if lang['id'] == language_id), 'Unknown')
+    lang_obj = next((lang for lang in DEMO_LANGUAGES if lang['id'] == language_id), {})
+    language_name = lang_obj.get('language_name', 'Unknown')
+    language_task = task or lang_obj.get('task', 'Coreference')
     
     dataset = {
         'id': len(DEMO_GOLD_DATASETS) + 1,
         'language_id': language_id,
         'language_name': language_name,
+        'language_task': language_task,
+        'task': language_task,
         'filename': filename,
         'file_path': file_path,
         'uploaded_by': uploaded_by,
@@ -1686,6 +2231,16 @@ def add_to_demo_datasets(language_id: int, filename: str, file_path: str, upload
     
     DEMO_GOLD_DATASETS.append(dataset)
     print(f"SUCCESS: Gold dataset added to demo data (Version {version}): {filename}")
+
+def demo_dataset_exists(language_id: int, task: str | None) -> bool:
+    """Return True if a non-deleted demo dataset exists for the language/task."""
+    target_task = task or "Coreference"
+    for ds in DEMO_GOLD_DATASETS:
+        if ds.get('is_deleted'):
+            continue
+        if ds.get('language_id') == language_id and (ds.get('task') or ds.get('language_task') or "Coreference") == target_task:
+            return True
+    return False
 
 if __name__ == "__main__":
     import uvicorn
