@@ -287,18 +287,20 @@
       }
 
       .reset-btn {
-        border: 1px solid #e74c3c;
-        color: #e74c3c;
-        background: #fff5f3;
+        border: 1px solid #1e3c72;
+        color: white;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         padding: 10px 14px;
         border-radius: 10px;
         cursor: pointer;
         font-weight: 600;
         transition: all 0.2s ease;
+        box-shadow: 0 4px 10px rgba(30, 60, 114, 0.15);
       }
 
       .reset-btn:hover {
-        background: #fdecea;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(30, 60, 114, 0.25);
       }
 
       .language-title {
@@ -568,8 +570,8 @@
             <span class="stat-label">Languages</span>
           </div>
           <div class="stat-item">
-            <span class="stat-number">4</span>
-            <span class="stat-label">Evaluation Metrics</span>
+            <span class="stat-number">{{ stats.total_tasks }}</span>
+            <span class="stat-label">Tasks</span>
           </div>
           <div class="stat-item">
             <span class="stat-number">{{ stats.total_participants }}</span>
@@ -650,9 +652,9 @@
             The <strong>Discourse Evaluation Leaderboard</strong> highlights the
             performance of systems on key discourse understanding tasks. It
             provides a transparent and standardized benchmarking platform for
-            evaluating <strong>Anaphora</strong> and
-            <strong>Coreference Resolution</strong> models across diverse
-            datasets and languages.
+            evaluating
+            <strong>{{ (tasks or ['Coreference']) | join(', ') }}</strong>
+            models across diverse datasets and languages.
           </p>
 
           <p class="about-text">
@@ -663,7 +665,7 @@
             improvement within specific evaluation dimensions.
           </p>
 
-          <h3>Evaluation Metrics</h3>
+          <!-- <h3>Evaluation Metrics</h3>
 
           <p class="about-text">
             We employ five widely accepted metrics to evaluate discourse
@@ -675,7 +677,7 @@
             aspect of coreference performance — from mention identification to
             entity alignment — providing a well-rounded understanding of system
             capabilities.
-          </p>
+          </p> -->
 
           <h3>How to Participate</h3>
 
@@ -688,7 +690,7 @@
           </p>
         </div>
 
-        <div class="metrics-grid">
+        <!-- <div class="metrics-grid">
           <div class="metric-card">
             <div class="metric-name">MUC</div>
             <div class="metric-description">
@@ -714,7 +716,7 @@
             </div>
           </div>
         </div>
-      </div>
+      </div> -->
     </section>
 
     <!-- Footer -->

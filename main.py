@@ -787,6 +787,7 @@ def get_homepage_statistics():
     """Get statistics for the homepage hero section"""
     stats = {
         'total_languages': 0,
+        'total_tasks': 0,
         'total_participants': 0,
         'total_evaluations': 0
     }
@@ -800,6 +801,11 @@ def get_homepage_statistics():
             cursor.execute("SELECT COUNT(*) as count FROM languages")
             result = cursor.fetchone()
             stats['total_languages'] = result['count'] if result else 0
+
+            # Get total distinct tasks (treat NULL as Coreference)
+            cursor.execute("SELECT COUNT(DISTINCT COALESCE(task, 'Coreference')) as count FROM languages")
+            result = cursor.fetchone()
+            stats['total_tasks'] = result['count'] if result else 0
             
             # Get total unique participants (users who have made evaluations)
             cursor.execute("SELECT COUNT(DISTINCT user_id) as count FROM user_evaluations")
@@ -812,7 +818,7 @@ def get_homepage_statistics():
             stats['total_evaluations'] = result['count'] if result else 0
             
             conn.close()
-            print(f"SUCCESS: Retrieved homepage statistics - Languages: {stats['total_languages']}, Participants: {stats['total_participants']}, Evaluations: {stats['total_evaluations']}")
+            print(f"SUCCESS: Retrieved homepage statistics - Languages: {stats['total_languages']}, Tasks: {stats['total_tasks']}, Participants: {stats['total_participants']}, Evaluations: {stats['total_evaluations']}")
         except Exception as e:
             print(f"ERROR retrieving homepage statistics from database: {e}")
             if conn:
@@ -827,13 +833,43 @@ def get_homepage_statistics():
 
 def get_demo_statistics():
     """Get statistics from demo data"""
+    tasks = { (lang.get('task') or 'Coreference') for lang in DEMO_LANGUAGES }
     stats = {
         'total_languages': len(DEMO_LANGUAGES),
+        'total_tasks': len(tasks),
         'total_participants': len([user for user in DEMO_USERS.values() if user['username'] != 'admin']),
         'total_evaluations': len(DEMO_EVALUATIONS)
     }
-    print(f"SUCCESS: Using demo statistics - Languages: {stats['total_languages']}, Participants: {stats['total_participants']}, Evaluations: {stats['total_evaluations']}")
+    print(f"SUCCESS: Using demo statistics - Languages: {stats['total_languages']}, Tasks: {stats['total_tasks']}, Participants: {stats['total_participants']}, Evaluations: {stats['total_evaluations']}")
     return stats
+
+def get_distinct_tasks():
+    """Get distinct task names for display"""
+    tasks = []
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT DISTINCT COALESCE(task, 'Coreference') AS task_name
+                FROM languages
+                WHERE is_deleted = FALSE
+                ORDER BY task_name
+            """)
+            rows = cursor.fetchall() or []
+            tasks = [row['task_name'] for row in rows]
+            conn.close()
+            print(f"SUCCESS: Retrieved {len(tasks)} distinct tasks for homepage")
+            return tasks
+        except Exception as e:
+            print(f"ERROR retrieving distinct tasks from database: {e}")
+            if conn:
+                conn.close()
+            # Fallback to demo data
+    # Use demo data if no DB connection or error
+    demo_tasks = sorted({ (lang.get('task') or 'Coreference') for lang in DEMO_LANGUAGES })
+    print(f"SUCCESS: Using demo tasks - {len(demo_tasks)} found")
+    return demo_tasks
 
 def get_language_leaderboards():
     """Get top 3 scores for each language"""
@@ -1035,6 +1071,7 @@ async def homepage(request: Request):
         
         # Get homepage statistics
         stats = get_homepage_statistics()
+        tasks = get_distinct_tasks()
         
         # Get language leaderboards
         leaderboards = get_language_leaderboards()
@@ -1042,6 +1079,7 @@ async def homepage(request: Request):
         return templates.TemplateResponse("homepage.html", {
             "request": request,
             "stats": stats,
+            "tasks": tasks,
             "leaderboards": leaderboards,
             "user": session_user,
             "dashboard_url": dashboard_url
@@ -1052,11 +1090,8 @@ async def homepage(request: Request):
         # Fallback with minimal data
         return templates.TemplateResponse("homepage.html", {
             "request": request,
-            "stats": {
-                'total_languages': len(DEMO_LANGUAGES),
-                'total_participants': len(DEMO_USERS),
-                'total_evaluations': len(DEMO_EVALUATIONS)
-            },
+            "stats": get_demo_statistics(),
+            "tasks": get_distinct_tasks(),
             "leaderboards": get_demo_leaderboards(),
             "user": None,
             "dashboard_url": None
