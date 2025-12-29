@@ -51,7 +51,7 @@ The system needs to recognize that **"He"** refers to **"John"**.
 
 | Feature | Description |
 |---------|-------------|
-| ✅ **Standardized Evaluation** | Uses industry-standard metrics (MUC, B-CUBED, CEAF, BLANC) |
+| ✅ **Standardized Evaluation** | Uses industry-standard metrics |
 | 🌍 **Multi-language Support** | Evaluate systems across different languages |
 | ⚡ **Real-time Results** | Get instant feedback on your system's performance |
 | 🏆 **Leaderboard** | Compare your results with other participants |
