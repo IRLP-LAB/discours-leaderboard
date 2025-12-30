@@ -75,7 +75,7 @@ The system needs to recognize that **"He"** refers to **"John"**.
 </td>
 <td width="50%">
 
-#### 📊 Comprehensive Metrics
+#### 📊 Comprehensive Tasks
 - **Anaphora and Coreference Resolution**
 - **POS Tag**
 - **Chunk**
