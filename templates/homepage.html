@@ -653,7 +653,7 @@
             performance of systems on key discourse understanding tasks. It
             provides a transparent and standardized benchmarking platform for
             evaluating
-            <strong>{{ (tasks or ['Coreference']) | join(', ') }}</strong>
+            <strong>{{ (tasks or ['Anaphora and Coreference Resolution']) | join(', ') }}</strong>
             models across diverse datasets and languages.
           </p>
 
@@ -771,7 +771,7 @@
           allEntries.push({
             language: lang.language_name,
             language_code: lang.language_code,
-            task: lang.task || "Coreference",
+            task: lang.task || "Anaphora and Coreference Resolution",
             team: score.team_name || score.username || "N/A",
             muc_f1: score.muc_f1,
             bcub_f1: score.bcub_f1,

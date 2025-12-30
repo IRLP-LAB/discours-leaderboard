@@ -19,7 +19,11 @@ from urllib.parse import urlencode
 
 app = FastAPI(root_path="/discours-leaderboard")
 
-DEFAULT_TASK_SUGGESTIONS = ["Coreference", "POS Tag", "Chunk"]
+TASK_STORAGE_NAME = "Coreference"
+TASK_DISPLAY_NAME = "Anaphora and Coreference Resolution"
+TASK_DISPLAY_ALIASES = {TASK_STORAGE_NAME, TASK_DISPLAY_NAME}
+
+DEFAULT_TASK_SUGGESTIONS = [TASK_DISPLAY_NAME, "POS Tag", "Chunk"]
 
 @app.exception_handler(HTTPException)
 async def handle_http_exception(request: Request, exc: HTTPException):
@@ -101,8 +105,8 @@ DEMO_USERS = {
 }
 
 DEMO_LANGUAGES = [
-    {'id': 1, 'language_code': 'hi', 'language_name': 'Hindi', 'task': 'Coreference'},
-    {'id': 2, 'language_code': 'en', 'language_name': 'English', 'task': 'Coreference'}
+    {'id': 1, 'language_code': 'hi', 'language_name': 'Hindi', 'task': TASK_STORAGE_NAME},
+    {'id': 2, 'language_code': 'en', 'language_name': 'English', 'task': TASK_STORAGE_NAME}
 ]
 
 # Demo storage for evaluations and gold datasets
@@ -115,9 +119,19 @@ def normalize_task(task: str) -> str:
     task_clean = (task or "").strip()
     if not task_clean:
         raise HTTPException(status_code=400, detail="Task selection is required")
+    if task_clean in TASK_DISPLAY_ALIASES:
+        return TASK_STORAGE_NAME
     if len(task_clean) > 50:
         raise HTTPException(status_code=400, detail="Task name must be 50 characters or less")
     return task_clean
+
+def display_task_name(task: str | None) -> str:
+    """Return the user-facing task label, collapsing legacy names."""
+    if not task or task in TASK_DISPLAY_ALIASES:
+        return TASK_DISPLAY_NAME
+    return task
+
+templates.env.filters["display_task"] = display_task_name
 
 def get_db_connection():
     try:
@@ -256,17 +270,29 @@ def authenticate_user(username: str, password: str):
 
 def find_gold_dataset(language_id: int, task: str | None = None):
     """Find the gold dataset for a given language (and task if provided)"""
+    def to_match_values(task_value: str | None) -> set[str]:
+        """Return possible stored task values for a requested task (storage + display alias)."""
+        if not task_value:
+            return {TASK_STORAGE_NAME}
+        if task_value in TASK_DISPLAY_ALIASES:
+            return {TASK_STORAGE_NAME, TASK_DISPLAY_NAME}
+        return {task_value}
+
+    match_values = to_match_values(task)
     conn = get_db_connection()
     
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            if task:
-                cursor.execute("""
+            if match_values:
+                placeholders = ",".join(["%s"] * len(match_values))
+                params = [language_id, *match_values]
+                null_clause = " OR task IS NULL" if TASK_STORAGE_NAME in match_values else ""
+                cursor.execute(f"""
                     SELECT * FROM gold_datasets 
-                    WHERE language_id = %s AND task = %s AND is_deleted = FALSE
+                    WHERE language_id = %s AND (task IN ({placeholders}){null_clause}) AND is_deleted = FALSE
                     ORDER BY created_at DESC LIMIT 1
-                """, (language_id, task))
+                """, params)
             else:
                 cursor.execute("""
                     SELECT * FROM gold_datasets 
@@ -285,10 +311,10 @@ def find_gold_dataset(language_id: int, task: str | None = None):
     # Fallback to demo data
     for dataset in DEMO_GOLD_DATASETS:
         if dataset['language_id'] == language_id:
-            if task:
-                if dataset.get('task') == task:
-                    return dataset
-            else:
+            if not match_values:
+                return dataset
+            dataset_task = dataset.get('task') or dataset.get('language_task') or TASK_STORAGE_NAME
+            if dataset_task in match_values:
                 return dataset
     
     return None
@@ -803,7 +829,7 @@ def get_homepage_statistics():
             stats['total_languages'] = result['count'] if result else 0
 
             # Get total distinct tasks (treat NULL as Coreference)
-            cursor.execute("SELECT COUNT(DISTINCT COALESCE(task, 'Coreference')) as count FROM languages")
+            cursor.execute("SELECT COUNT(DISTINCT COALESCE(task, %s)) as count FROM languages", (TASK_STORAGE_NAME,))
             result = cursor.fetchone()
             stats['total_tasks'] = result['count'] if result else 0
             
@@ -833,7 +859,7 @@ def get_homepage_statistics():
 
 def get_demo_statistics():
     """Get statistics from demo data"""
-    tasks = { (lang.get('task') or 'Coreference') for lang in DEMO_LANGUAGES }
+    tasks = { display_task_name(lang.get('task')) for lang in DEMO_LANGUAGES }
     stats = {
         'total_languages': len(DEMO_LANGUAGES),
         'total_tasks': len(tasks),
@@ -851,13 +877,14 @@ def get_distinct_tasks():
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("""
-                SELECT DISTINCT COALESCE(task, 'Coreference') AS task_name
+                SELECT DISTINCT COALESCE(task, %s) AS task_name
                 FROM languages
                 WHERE is_deleted = FALSE
                 ORDER BY task_name
-            """)
+            """, (TASK_STORAGE_NAME,))
             rows = cursor.fetchall() or []
-            tasks = [row['task_name'] for row in rows]
+            tasks = [display_task_name(row['task_name']) for row in rows]
+            tasks = sorted(set(tasks))
             conn.close()
             print(f"SUCCESS: Retrieved {len(tasks)} distinct tasks for homepage")
             return tasks
@@ -867,7 +894,7 @@ def get_distinct_tasks():
                 conn.close()
             # Fallback to demo data
     # Use demo data if no DB connection or error
-    demo_tasks = sorted({ (lang.get('task') or 'Coreference') for lang in DEMO_LANGUAGES })
+    demo_tasks = sorted({ display_task_name(lang.get('task')) for lang in DEMO_LANGUAGES })
     print(f"SUCCESS: Using demo tasks - {len(demo_tasks)} found")
     return demo_tasks
 
@@ -889,9 +916,10 @@ def get_language_leaderboards():
                     'language_id': language['id'],
                     'language_name': language['language_name'],
                     'language_code': language['language_code'],
-                    'task': language.get('task', 'Coreference'),
+                    'task': display_task_name(language.get('task')),
                     'top_scores': []
                 }
+                task_value = language.get('task') or TASK_STORAGE_NAME
                 
                 # Get ALL scores for this language, using only non-deleted datasets
                 # Get the latest version of the dataset for this language
@@ -910,7 +938,7 @@ def get_language_leaderboards():
                         WHERE language_id = %s AND is_deleted = 0 AND (task = %s OR task IS NULL)
                     )
                     ORDER BY avg_f1 DESC
-                """, (language.get('task', 'Coreference'), language['id'], language['id'], language.get('task', 'Coreference')))
+                """, (task_value, language['id'], language['id'], task_value))
                 
                 top_scores = cursor.fetchall()
                 
@@ -970,7 +998,7 @@ def get_demo_leaderboards():
             'language_id': language['id'],
             'language_name': language['language_name'],
             'language_code': language['language_code'],
-            'task': language.get('task', 'Coreference'),
+            'task': display_task_name(language.get('task')),
             'top_scores': []
         }
         
@@ -1220,7 +1248,8 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
             languages = []
             seen = set()
             for row in rows:
-                task_val = row.get('dataset_task') or row.get('lang_task') or 'Coreference'
+                task_val = row.get('dataset_task') or row.get('lang_task') or TASK_STORAGE_NAME
+                task_display = display_task_name(task_val)
                 key = (row['id'], task_val)
                 if key in seen:
                     continue
@@ -1229,12 +1258,12 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
                     'id': row['id'],
                     'language_code': row['language_code'],
                     'language_name': row['language_name'],
-                    'task': task_val
+                    'task': task_display
                 }
                 client_languages.append(lang_entry)
                 languages.append(lang_entry)  # reuse for tojson if needed elsewhere
-                if task_val and task_val not in task_suggestions:
-                    task_suggestions.append(task_val)
+                if task_display and task_display not in task_suggestions:
+                    task_suggestions.append(task_display)
             conn.close()
         except Exception as e:
             print(f"Database error getting languages: {e}")
@@ -1249,7 +1278,8 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
                     if ds.get('is_deleted'):
                         continue
                     if ds.get('language_id') == lang['id']:
-                        task_val = ds.get('task') or lang.get('task') or 'Coreference'
+                        task_val = ds.get('task') or lang.get('task') or TASK_STORAGE_NAME
+                        task_display = display_task_name(task_val)
                         key = (lang['id'], task_val)
                         if key in seen:
                             continue
@@ -1258,11 +1288,11 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
                             'id': lang['id'],
                             'language_code': lang['language_code'],
                             'language_name': lang['language_name'],
-                            'task': task_val
+                            'task': task_display
                         }
                         client_languages.append(entry)
-                        if task_val and task_val not in task_suggestions:
-                            task_suggestions.append(task_val)
+                        if task_display and task_display not in task_suggestions:
+                            task_suggestions.append(task_display)
             if conn:
                 conn.close()
     else:
@@ -1276,7 +1306,8 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
                 if ds.get('is_deleted'):
                     continue
                 if ds.get('language_id') == lang['id']:
-                    task_val = ds.get('task') or lang.get('task') or 'Coreference'
+                    task_val = ds.get('task') or lang.get('task') or TASK_STORAGE_NAME
+                    task_display = display_task_name(task_val)
                     key = (lang['id'], task_val)
                     if key in seen:
                         continue
@@ -1285,17 +1316,17 @@ async def client_dashboard(request: Request, user: dict = Depends(get_current_us
                         'id': lang['id'],
                         'language_code': lang['language_code'],
                         'language_name': lang['language_name'],
-                        'task': task_val
+                        'task': task_display
                     }
                     client_languages.append(entry)
-                    if task_val and task_val not in task_suggestions:
-                        task_suggestions.append(task_val)
+                    if task_display and task_display not in task_suggestions:
+                        task_suggestions.append(task_display)
     
     # Get user's evaluation history
     history = get_user_evaluation_history(user['id'])
     history_by_task = {}
     for record in history:
-        task_name = record.get('task') or 'Coreference'
+        task_name = display_task_name(record.get('task'))
         history_by_task.setdefault(task_name, []).append(record)
     
     return templates.TemplateResponse("client_dashboard.html", {
@@ -1321,11 +1352,12 @@ async def evaluate_file(
     print(f"STARTING EVALUATION: User {user['username']}, Language ID {language_id}, File {file.filename}")
     
     try:
-        task_normalized = normalize_task(task) if task else "Coreference"
+        task_normalized = normalize_task(task) if task else TASK_STORAGE_NAME
         # Find gold dataset for the language
         gold_dataset = find_gold_dataset(language_id, task_normalized)
         if not gold_dataset:
-            raise HTTPException(status_code=400, detail=f"No gold dataset found for language ID {language_id} and task '{task}'. Please upload a gold dataset first.")
+            user_friendly_task = display_task_name(task or TASK_STORAGE_NAME)
+            raise HTTPException(status_code=400, detail=f"No gold dataset found for language ID {language_id} and task '{user_friendly_task}'. Please upload a gold dataset first.")
         
         print(f"FOUND GOLD DATASET: {gold_dataset['filename']} at {gold_dataset['file_path']}")
         
@@ -1573,7 +1605,7 @@ def add_to_demo_languages(language_code: str, language_name: str, task: str):
     
     # Check if code already exists
     for lang in DEMO_LANGUAGES:
-        if lang['language_code'] == language_code and lang.get('task', 'Coreference') == task and not lang.get('is_deleted'):
+        if lang['language_code'] == language_code and lang.get('task', TASK_STORAGE_NAME) == task and not lang.get('is_deleted'):
             raise HTTPException(status_code=400, detail=f"Language code '{language_code}' already exists for task '{task}'")
     
     new_id = max([lang['id'] for lang in DEMO_LANGUAGES], default=0) + 1
@@ -1595,7 +1627,7 @@ def update_demo_language(language_id: int, language_code: str, language_name: st
     for lang in DEMO_LANGUAGES:
         if (
             lang['language_code'] == language_code
-            and lang.get('task', 'Coreference') == task
+            and lang.get('task', TASK_STORAGE_NAME) == task
             and lang['id'] != language_id
             and not lang.get('is_deleted')
         ):
@@ -1641,7 +1673,7 @@ def build_task_suggestions(languages: list, fallback_languages: list) -> list:
     for lang in source:
         if lang.get('is_deleted'):
             continue
-        task = lang.get('task')
+        task = display_task_name(lang.get('task'))
         if task:
             tasks.add(task)
     for default_task in DEFAULT_TASK_SUGGESTIONS:
@@ -1659,6 +1691,10 @@ def make_json_safe(records: list) -> list:
                     converted[key] = value.isoformat()
                 elif isinstance(value, Decimal):
                     converted[key] = float(value)
+                elif isinstance(value, str) and 'task' in key.lower():
+                    converted[key] = display_task_name(value)
+                elif value is None and 'task' in key.lower():
+                    converted[key] = display_task_name(value)
                 else:
                     converted[key] = value
             safe_records.append(converted)
@@ -1787,6 +1823,17 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
             if not ds.get('language_task'):
                 ds['language_task'] = lang_task_map.get(ds.get('language_id'))
 
+    # Use the new display label across UI data
+    for lang in languages:
+        lang['task'] = display_task_name(lang.get('task'))
+    for ds in gold_datasets:
+        ds['task'] = display_task_name(ds.get('task'))
+        if 'language_task' in ds:
+            ds['language_task'] = display_task_name(ds.get('language_task'))
+    for activity in recent_activities:
+        if 'language_task' in activity:
+            activity['language_task'] = display_task_name(activity.get('language_task'))
+
     task_suggestions = build_task_suggestions(languages, demo_languages)
     # Stats: distinct tasks and distinct language codes (ignoring task)
     source_langs = languages if languages else demo_languages
@@ -1796,7 +1843,7 @@ async def admin_dashboard(request: Request, user: dict = Depends(get_current_use
         if lang.get('is_deleted'):
             continue
         code = lang.get('language_code')
-        task = lang.get('task')
+        task = display_task_name(lang.get('task'))
         if code:
             unique_codes.add(code.lower())
         if task:
@@ -2089,7 +2136,7 @@ async def upload_gold_dataset(
         raise HTTPException(status_code=400, detail="Only .txt files allowed")
     
     try:
-        task_normalized = normalize_task(task) if task else "Coreference"
+        task_normalized = normalize_task(task) if task else TASK_STORAGE_NAME
         
         # Create language-specific directory
         lang_dir = Path("gold_datasets") / f"lang_{language_id}"
@@ -2146,7 +2193,7 @@ async def upload_gold_dataset(
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO gold_datasets (language_id, filename, file_path, uploaded_by, is_deleted, version, task) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (language_id, file.filename, str(file_path), user['username'], False, next_version, task_normalized or "Coreference")
+                    (language_id, file.filename, str(file_path), user['username'], False, next_version, task_normalized or TASK_STORAGE_NAME)
                 )
                 conn.commit()
                 conn.close()
@@ -2248,7 +2295,7 @@ def add_to_demo_datasets(language_id: int, filename: str, file_path: str, upload
     """Add gold dataset to demo data"""
     lang_obj = next((lang for lang in DEMO_LANGUAGES if lang['id'] == language_id), {})
     language_name = lang_obj.get('language_name', 'Unknown')
-    language_task = task or lang_obj.get('task', 'Coreference')
+    language_task = task or lang_obj.get('task', TASK_STORAGE_NAME)
     
     dataset = {
         'id': len(DEMO_GOLD_DATASETS) + 1,
@@ -2269,17 +2316,17 @@ def add_to_demo_datasets(language_id: int, filename: str, file_path: str, upload
 
 def demo_dataset_exists(language_id: int, task: str | None) -> bool:
     """Return True if a non-deleted demo dataset exists for the language/task."""
-    target_task = task or "Coreference"
+    target_task = task or TASK_STORAGE_NAME
     for ds in DEMO_GOLD_DATASETS:
         if ds.get('is_deleted'):
             continue
-        if ds.get('language_id') == language_id and (ds.get('task') or ds.get('language_task') or "Coreference") == target_task:
+        if ds.get('language_id') == language_id and (ds.get('task') or ds.get('language_task') or TASK_STORAGE_NAME) == target_task:
             return True
     return False
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting Coreference Evaluation System...")
+    print("Starting Anaphora and Coreference Resolution Evaluation System...")
     print("Demo credentials:")
     print("  Admin: admin/admin123")
     print("  User: testuser/user123")

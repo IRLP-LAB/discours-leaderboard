@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Client Dashboard - Coreference Evaluation</title>
+    <title>Client Dashboard - Anaphora and Coreference Resolution Evaluation</title>
     <style>
       * {
         margin: 0;
@@ -524,7 +524,7 @@
             return;
           }
           const filtered = allLanguages.filter(
-            (lang) => (lang.task || "Coreference") === task && !lang.is_deleted
+            (lang) => (lang.task || "Anaphora and Coreference Resolution") === task && !lang.is_deleted
           );
           if (filtered.length === 0) {
             if (emptyNotice) emptyNotice.style.display = "block";

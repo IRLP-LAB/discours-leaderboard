@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Dashboard - Coreference Evaluation</title>
+    <title>Admin Dashboard - Anaphora and Coreference Resolution Evaluation</title>
     <style>
       * {
         margin: 0;
@@ -576,7 +576,7 @@
                 <tbody>
                   {% for lang in languages %}
                   <tr>
-                    <td>{{ lang.task or 'Coreference' }}</td>
+                    <td>{{ lang.task|display_task }}</td>
                     <td>
                       <span class="language-code"
                         >{{ lang.language_code }}</span
@@ -593,7 +593,7 @@
                       <div class="action-buttons">
                         <button
                           class="btn btn-small"
-                          onclick="editLanguage('{{ lang.id }}', '{{ lang.language_code }}', '{{ lang.language_name }}', '{{ lang.task or 'Coreference' }}')"
+                          onclick="editLanguage('{{ lang.id }}', '{{ lang.language_code }}', '{{ lang.language_name }}', '{{ lang.task|display_task }}')"
                         >
                           Edit
                         </button>
@@ -700,7 +700,7 @@
                 <tbody>
                   {% for dataset in gold_datasets %}
                   <tr>
-                    <td>{{ dataset.language_task or 'N/A' }}</td>
+                    <td>{{ (dataset.language_task|display_task) if dataset.language_task else 'N/A' }}</td>
                     <td>{{ dataset.language_name }}</td>
                     <td>{{ dataset.filename }}</td>
                     <td>{{ dataset.uploaded_by }}</td>
@@ -768,7 +768,7 @@
                     <td>{{ activity.username }}</td>
                     <td>{{ activity.team_name or 'N/A' }}</td>
                     <td>{{ activity.activity_type|title }}</td>
-                    <td>{{ activity.language_task or 'N/A' }}</td>
+                    <td>{{ (activity.language_task|display_task) if activity.language_task else 'N/A' }}</td>
                     <td>{{ activity.language_used or 'N/A' }}</td>
                     <td>{{ activity.file_uploaded or 'N/A' }}</td>
                     <td>{{ activity.formatted_date }}</td>
@@ -1044,7 +1044,7 @@
           languageSelect.innerHTML = '<option value="">Select Language...</option>';
           if (!task) return;
           const filtered = allLanguages.filter(
-            (lang) => (lang.task || "Coreference") === task && !lang.is_deleted
+            (lang) => (lang.task || "Anaphora and Coreference Resolution") === task && !lang.is_deleted
           );
           filtered.forEach((lang) => {
             const opt = document.createElement("option");
@@ -1073,7 +1073,7 @@
             const existing = allDatasets.find(
               (ds) =>
                 String(ds.language_id) === String(langId) &&
-                (ds.language_task || ds.task || "Coreference") === task &&
+                (ds.language_task || ds.task || "Anaphora and Coreference Resolution") === task &&
                 !ds.is_deleted
             );
             if (existing) {

@@ -35,11 +35,11 @@
 
 ## 🎯 Overview
 
-The **Discourse Resolution Evaluation System** is a FastAPI-based web application designed for researchers and practitioners working on coreference resolution. It provides automated evaluation of system outputs against gold standard datasets using multiple standardized metrics.
+The **Discourse Resolution Evaluation System** is a FastAPI-based web application designed for researchers and practitioners working on anaphora and coreference resolution. It provides automated evaluation of system outputs against gold standard datasets using multiple standardized metrics.
 
-### 💡 What is Coreference Resolution?
+### 💡 What is Anaphora and Coreference Resolution?
 
-Coreference resolution is the task of identifying when different expressions in text refer to the same real-world entity. 
+Anaphora and coreference resolution is the task of identifying when different expressions in text refer to the same real-world entity. 
 
 **Example:**
 ```
@@ -432,7 +432,7 @@ python main.py
 
 **Expected Output:**
 ```
-Starting Coreference Evaluation System...
+Starting Anaphora and Coreference Resolution Evaluation System...
 Demo credentials:
   Admin: admin/admin123
   User: testuser/user123
@@ -543,9 +543,9 @@ doc_id    1    3    .    -
 | 2 | Part number | `0`, `1`, etc. |
 | 3 | Token number | `0`, `1`, `2`, etc. |
 | 4 | Word/Token | `John`, `went`, etc. |
-| 5 | Coreference | `(1)`, `(2`, `2)`, `-` |
+| 5 | Anaphora and Coreference Resolution | `(1)`, `(2`, `2)`, `-` |
 
-**Coreference Annotations:**
+**Anaphora and Coreference Resolution Annotations:**
 - `(1)` - Singleton mention in chain 1
 - `(2` - Mention starts in chain 2
 - `2)` - Mention ends in chain 2
