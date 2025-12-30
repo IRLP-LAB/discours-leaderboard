@@ -76,10 +76,9 @@ The system needs to recognize that **"He"** refers to **"John"**.
 <td width="50%">
 
 #### 📊 Comprehensive Metrics
-- **MUC** - Link-based evaluation
-- **B-CUBED** - Mention-based evaluation
-- **CEAF-M/E** - Entity alignment
-- **BLANC** - Bilateral assessment
+- **Anaphora and Coreference Resolution**
+- **POS Tag**
+- **Chunk**
 
 </td>
 </tr>
